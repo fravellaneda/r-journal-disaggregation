@@ -1,0 +1,401 @@
+---
+title: "Disaggregation Modeling in R with INLA: Spatial, Multivariate, and Spatio-Temporal Models"
+date: "2026-02-02"
+abstract: >
+  Reliable high-resolution data is often unavailable due to privacy constraints or the high cost of fine-scale sampling, leaving researchers with data aggregated over coarse administrative units. Spatial disaggregation is essential for overcoming this limitation, as it enhances spatial resolution to uncover hidden local patterns and enables policymakers to make more precise, evidence-based decisions. We propose a robust spatial disaggregation framework and extend it to multivariate and spatio-temporal settings. Our approach assumes the existence of an underlying latent Gaussian field that represents the true process at a fine scale; by linking this latent field to the aggregated response variables, we can integrate high-resolution covariates for explanatory purposes. Leveraging the Integrated Nested Laplace Approximation (INLA) in R, our models provide a computationally efficient alternative to traditional MCMC methods, allowing for sophisticated uncertainty quantification across complex spatial and temporal dimensions.
+draft: true
+author:  
+  - name: Fernando Rodriguez Avellaneda
+    affiliation: King Abdullah University of Science and Technology (KAUST)
+    address: Thuwal, Saudi Arabia
+    url: https://linkedin.com/in/fr-avellaneda
+    orcid: 0009-0000-0937-0698
+    email:  fernando.rodriguezavellaneda@kaust.edu.sa
+  - name: Paula Moraga
+    affiliation: King Abdullah University of Science and Technology (KAUST)
+    address: Thuwal, Saudi Arabia.
+    url: https://www.paulamoraga.com/
+    email: paula.moraga@kaust.edu.sa
+    orcid: 0000-0001-5266-0201
+output: 
+  bookdown::html_document2: default
+  rjtools::rjournal_pdf:
+    keep_tex: true
+    latex_engine: xelatex
+  rjtools::rjournal_article:
+    self_contained: yes
+    toc: no
+  bookdown::pdf_document2:
+    latex_engine: xelatex
+bibliography: RJreferences.bib
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+library(patchwork)
+library(ggplot2)
+library(viridis)
+
+library(kableExtra)
+library(terra)
+library(rnaturalearth)
+library(sf)
+library(tidyterra)
+library(fmesher)
+library(INLA)
+
+pkg <- function(x) {
+  if (knitr::is_html_output()) {
+    sprintf("<a href='https://CRAN.R-project.org/package=%s'><code>%s</code></a>", x, x)
+  } else {
+    sprintf("\\texttt{%s}", x)
+  }
+}
+
+```
+
+# Introduction
+
+# Methodology {#sec:methods}
+
+# Spatial disaggregation of PM2.5 concentration {#spatial-dis}
+
+In this section, we illustrate spatial disaggregation by improving the resolution of PM2.5 concentrations in Portugal from 10km to 2km. We used annual air quality reanalysis data for Portugal provided by the Copernicus Atmosphere Monitoring Service (CAMS) [@copernicus_data], a high-resolution product developed by the European Centre for Medium-Range Weather Forecasts (ECMWF). This publicly accessible dataset, available at https://ads.atmosphere.copernicus.eu/datasets/cams-europe-air-quality-reanalyses, integrates satellite observations and auxiliary information to get estimations of air pollution levels in a very corase resolution.
+
+## Data acquisition and preprocessing {#spatial-data-pre}
+
+To download the data, you need to create an account on the Atmospheric Data Store (ADS), accept the terms and conditions, and obtain the "Licence to use Copernicus Products." After setup, the data can be downloaded using the Python API. More details on setting up the API are available at https://ads.atmosphere.copernicus.eu/how-to-api. In our request, the argument $\texttt{variable = ["particulate_matter_2.5um"]}$ selects PM$_{2.5}$ concentrations, $\texttt{model = ["ensemble"]}$ specifies the ensemble product, $\texttt{level = ["0"]}$ indicates the surface level, $\texttt{type = ["validated_reanalysis"]}$ requests the validated reanalysis product, and $\texttt{year = ["2022"]}$ and $\texttt{month = ["01"]}$ restrict the download to January 2022.
+
+After downloading and unzipping the data, we use the `r pkg("terra")` package to read the $\texttt{nc}$ file. NetCDF (Network Common Data Form) files are widely used for storing multi-dimensional scientific data, such as climate or GIS datasets, because they are self-describing, portable, and efficient for large arrays. The original dataset contains hourly samples for the 31 days of January 2022, totaling 744 observations. Since our focus is on identifying mean trends, we calculated the average PM2.5 concentration for each location. As the original data covers the entire European continent, we cropped the spatial extent to focus specifically on Portugal. To provide better geographical context in our visualizations, we also included the administrative boundaries of Portugal and Spain for clear regional identification using packages `r pkg("rnaturalearth")` and `r pkg("sf")`. Finally for plotting we used `r pkg("ggplot2")`, `r pkg("tidyterra")` and `r pkg("viridis")` packages.
+
+To simplify replication and avoid the ADS download and NetCDF preprocessing steps, we provide the preprocessed dataset as $\texttt{pm2p5.csv}$, which contains the processed PM2.5 values in CSV format.
+
+```{r pm25-plot,fig.align='center' , fig.cap="Mean PM2.5 concentration in Portugal during January 2022. Country boundaries for Portugal and Spain are overlaid for geographic reference." ,include=TRUE, echo=TRUE}
+# Define the squared study region and convert to dataframe
+sq <- ext(-9.7,-6,36.9,42.3)
+
+# Read the dataset and compute mean value (From source)
+r <- rast("../../../../data/cams.eaq.vra.ENSa.pm2p5.l0.2022-01.nc")
+r_mean <- app(r, mean, na.rm = TRUE)
+r_sq <- crop(r_mean, sq)
+df <- as.data.frame(r_sq, xy = TRUE, na.rm = TRUE)
+df <- df[order(df$y,df$x), ]
+names(df) <- c("longitude","latitude","pm2p5")
+write.csv(df, "../../../../data/pm2p5.csv", row.names = FALSE)
+
+# Read dataset from preprocess file 
+df <- read.csv("../../../../data/pm2p5.csv")
+ 
+# Get portugal and Spain borders
+boundary <- ne_countries(scale="medium", returnclass="sf") |>
+  subset(admin %in% c("Portugal","Spain")) |>
+  st_transform(4326)
+
+# Plot PM2.5 contamination and boundary countries
+ggplot() +
+  geom_spatraster(data = r_sq) +
+  geom_sf(data = boundary, fill = NA, color = "black") +
+  scale_fill_viridis_c(name = "PM2.5") +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 9)
+  ) +
+  coord_sf(xlim = c(xmin(sq), xmax(sq)),
+           ylim = c(ymin(sq), ymax(sq)),
+           expand = FALSE)
+```
+
+Figure (\@ref(fig:pm25-plot)) shows the spatial distribution of mean PM2.5 over the Portugal for January 2022. Higher concentrations are observed in northern Portugal. The map is provided on the original CAMS grid (about 0.1$^\circ$, roughly 10 km), which is relatively coarse for local-scale interpretation; we therefore target a finer resolution of 0.02$^\circ$ (approximately 2 km) using spatial disaggregation.
+
+## Input grid, spatial mesh, and prediction locations {#sec:mesh}
+
+The first step in the disaggregation workflow is to construct an input grid that matches the support of the observed data. Using the dataframe $\texttt{df}$, we build a squared grid as an $\texttt{sf}$ object with the same spatial extent and dimensions as the original dataset. The second step is to build a spatial mesh that is finer than the initial resolution of the data, as shown on the right side of Figure (@ref(fig:mesh-plot)). This panel displays a portion of the triangulated mesh, represented by black segments, together with the original gridded support, shown in red. Finally, to achieve the target disaggregation from 0.1$^\circ$ to 0.02$^\circ$, we define the prediction points on the desired high resolution grid. The variable $\texttt{spf}$ controls the disaggregation factor. Specifically, setting $\texttt{spf}=5$ increases the resolution within each original cell by a factor of $5 \times 5 = 25$, as illustrated on the left side of Figure (\@ref(fig:mesh-plot)), where red lines denote the original grid and blue dots indicate the prediction locations under the disaggregated scenario.
+
+```{r mesh-plot, fig.cap="Spatial discretization for disaggregation. Original grid support is shown in red. Prediction points for $\texttt{spf}=5$ are shown in blue (left), and a portion of the triangulated mesh is shown in black (right)" ,fig.align='center',include=TRUE, echo=TRUE}
+# Initial squared grid 
+map <- st_as_sf(st_make_grid(sq, n = c(length(unique(df$longitude)),
+                               length(unique(df$latitude)))))
+st_geometry(map) <- "geometry"
+st_crs(map) <- "EPSG:4326"
+
+# Spatial mesh 
+
+sq_sf <- st_as_sf(as.polygons(sq))
+
+hexpts <- fm_hexagon_lattice(
+  bnd = st_buffer(sq_sf, 0.1), 
+  edge_len = 0.05
+)
+
+smesh <- fm_mesh_2d(
+  loc = hexpts,
+  max.edge = 0.1,
+  offset = 0.05
+)
+
+# prediction points
+
+spf <- 5 # spatial factor
+def <- abs(unique(df$latitude)[2]-unique(df$latitude)[1])/2 
+
+x <- seq(min(df$longitude) - def*((spf-1)/spf),
+         max(df$longitude) + def*((spf-1)/spf),
+         length.out = length(unique(df$longitude))*spf)
+
+y <- seq(min(df$latitude) - def*((spf-1)/spf),
+         max(df$latitude) + def*((spf-1)/spf),
+         length.out = length(unique(df$latitude))*spf)
+
+dp <- as.matrix(expand.grid(x, y))
+dpdf <- data.frame(dp)
+names(dpdf) <- c("x","y")
+
+dpdf_sf <- st_as_sf(dpdf,coords = c("x","y"),crs="EPSG:4326")
+dpdf_sf$id <- 1:nrow(dpdf)
+
+# Plots
+par(mfrow = c(1, 2), pty = "s")
+plot(smesh,xlim = c(-9.65,-9.45),ylim = c(36.5,37.5))
+plot(map$geometry, add = TRUE, border = "red", lwd = 2)
+
+plot(map$geometry, border = "red", lwd = 2 ,xlim = c(-9.7,-9.5),ylim = c(36.9,37.1))
+plot(dpdf_sf$geometry, add = TRUE, col = "blue", lwd = 1)
+
+```
+
+## Covariates
+
+We incorporate high resolution elevation data, at approximately $60$m resolution, from the EuroDEM product maintained by EuroGeographics [@eurogeographics2023eurodem] that is available in the following website https://www.mapsforeurope.org/datasets/euro-dem. Elevation is included as a covariate to relate PM2.5 concentrations with changes in altitude and to improve the explanatory power of the spatial disaggregation model across the study region. To use this covariate within the disaggregation framework, we align its spatial support with both the original CAMS grid and the high resolution prediction grid, by aggregating elevation to the 0.1$^\circ$ input cells and extracting values at the 0.02$^\circ$ prediction locations. Figure (\@ref(fig:elev-plot)) illustrates the resulting elevation focused on Portugal, on the input grid, shown on the left, and at the prediction points, shown on the right. This step can be computationally demanding because EuroDEM is provided at very fine resolution and covers all of Europe, and it must be reprojected to EPSG:4326 before cropping. To reduce computation time, we provide a preprocessed version already reprojected, aggregated and cropped to the study region called $\texttt{eurodemc.tif}$.
+
+```{r elev-plot, fig.cap="Elevation over Portugal on the input grid (left) and the prediction grid (right), with country boundaries for reference. Country boundaries are overlaid for geographic reference." ,fig.align='center',include=TRUE, echo=TRUE}
+# Time consuming: This preprocessing takes roughly 40 minutes to be executed
+# r <- rast("../../../../data/eurodem.tif")
+# r_map <- project(r, "EPSG:4326")
+# writeRaster(r_map, "../../../../data/eurodemp.tif", overwrite = TRUE)
+# r_map <- rast("../../../../data/eurodemp.tif")
+# r_crop <- crop(r_map,sq_sf)
+# r_ag <- aggregate(r_crop, fact = 2, fun = mean, na.rm = TRUE)
+# writeRaster(r_ag, "../../../../data/eurodemc.tif", overwrite = TRUE)
+
+# Time consuming: after preprocessing this part takes around 1 minute to be executed
+r_crop <- rast("../../../../data/eurodemc.tif")
+
+map$elev <- terra::extract(r_crop,map,mean,na.rm = TRUE)$eurodem
+map$elev[is.nan(map$elev)] <- 0
+
+map_pred <- st_as_sf(st_make_grid(sq, n = c(length(unique(df$longitude)),
+                               length(unique(df$latitude)))*spf))
+st_crs(map_pred) <- "EPSG:4326"
+
+map_pred$elev <- terra::extract(r_crop,map_pred,mean,na.rm = TRUE)$eurodem
+map_pred$elev[is.nan(map_pred$elev)] <- 0
+
+p1 <- ggplot(map) +
+  geom_sf(aes(fill = elev), color = NA) +
+  scale_fill_viridis_c(name = "Elevation (m)") + 
+  geom_sf(data = boundary, fill = NA, color = "black") +
+  coord_sf(xlim = c(-10, -6), ylim = c(36.5,42.5),
+           expand = FALSE)
+
+p2 <- ggplot(map_pred) +
+  geom_sf(aes(fill = elev), color = NA) +
+  scale_fill_viridis_c(name = "Elevation (m)") + 
+  geom_sf(data = boundary, fill = NA, color = "black") +
+  coord_sf(xlim = c(-10, -6), ylim = c(36.5,42.5),
+           expand = FALSE)
+
+p1 <- p1 +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 9),
+    plot.margin = margin(t = 5.5, r = 5.5, b = 18, l = 5.5)
+  )
+
+p2 <- p2 +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 9),
+    plot.margin = margin(t = 5.5, r = 5.5, b = 18, l = 5.5)
+  )
+
+p1 + p2
+
+```
+
+
+## Model
+
+The main objective of this model is to perform spatial disaggregation by increasing the resolution from 0.1$^\circ$ to 0.02$^\circ$, which corresponds approximately to a change from 10 km to 2 km using `r pkg("INLA")` . We assume the existence of a latent continuous spatial process for PM2.5 that is only observed through aggregated measurements, and it is linked to the observations through the aggregation operator in Equation \@ref(eq:agg-con). The latent PM2.5 field is then defined as
+
+\begin{equation}
+\text{pm}_{2.5}(\mathbf{s}) = \beta_0 + \beta_1\,\text{altitude}(\mathbf{s}) + z(\mathbf{s}) + e(\mathbf{s}) (\#eq:app-pm25)
+\end{equation}
+
+where $\beta_0$ is an intercept and $\beta_1$ is the regression coefficient associated with altitude. The term $z(\mathbf{s})$ represents a spatially structured random effect, modeled as a zero mean Gaussian process with a Mat\'ern covariance function, and $e(\mathbf{s})$ is an unstructured error term, modeled as a zero mean Gaussian process that is independent across space.
+
+## Model inputs for INLA
+
+To fit the model described in Equation \@ref(eq:app-pm25), we use the triangulated mesh defined before in Section \@ref(sec:mesh). We then construct the SPDE representation on this mesh, and build the corresponding projection matrices that link the observation locations and the prediction points to the mesh nodes. Finally, we combine the response, covariates, and latent components into \texttt{INLA} stacks, which are used to perform model estimation and prediction. 
+
+```{r include=TRUE, echo=TRUE}
+# Construct the SPDE in the spatial mesh
+spde <- inla.spde2.matern(mesh = smesh, alpha = 2, constr = TRUE)
+
+n.ar <- nrow(map) # number of initial regions
+nv <- smesh$n # number of mesh nodes
+
+mesh_sf <- st_as_sf(data.frame(x=smesh$loc[,1],y=smesh$loc[,2],id=1:nv),
+                    coords = c("x","y"),crs="EPSG:4326")
+
+# Projection matrix from initial data to the triangulated mesh
+A.m <- matrix(0, n.ar, nv)
+inter <- as.list(st_contains(map[,c()],mesh_sf))
+
+for (i in 1:n.ar){
+  idx <- inter[[i]]
+  A.m[i,idx] <- 1/length(idx)
+}
+A.m <- as(A.m, "dgCMatrix")
+
+# Projection matrix from the mesh to the predicted points
+A.pr <- inla.spde.make.A(mesh = smesh, loc = dp)
+
+# Stack for estimation
+stk.est <- inla.stack(
+  data = list(y = df$pm2p5),
+  A = list(A.m,1,A.m),
+  effects = list(
+    s = 1:nv,
+    elev = map$elev/1000, # convert m to km 
+    b0 = rep(1, nv)
+  ),
+  tag = "y")
+
+# Stack for prediction
+stk.pred <- inla.stack(
+  data = list(y = NA),
+  A = list(A.pr, 1, A.pr),
+  effects = list(
+    s = 1:nv,
+    elev = map_pred$elev/1000, # convert m to km 
+    b0 = rep(1, nv)
+    ),
+  tag = "y.pred")
+
+# Stack for estimation and prediction
+stk.full <- inla.stack(stk.est, stk.pred)
+```
+
+## Fitting the model with INLA
+
+Now, we translate Equation \@ref(eq:app-pm25) into an $\texttt{INLA}$ formula, where the symbol $\texttt{~}$ defines the linear predictor for the response $y$. The term $\texttt{0 + b0}$ adds an explicit intercept, with $\texttt{b0}$ being a column of ones included in the stack. The term $\texttt{elev}$ represents elevation as a fixed effect, and $\texttt{f(s, model = spde)}$ specifies the spatial random effect on the mesh using the SPDE model. We fit the model with $\texttt{inla()}$ using the stacked data object $\texttt{stk.full}$, and set $\texttt{family = "gaussian"}$ because $y$ is continuous. If the response $y$ is non Gaussian, such as counts modeled with a Poisson variable, the model specification need to be adapted. For these settings, we recomend using the package `r pkg("inlabru")` along `r pkg("INLA")` that provides a workflow to deal with that kind of data [@inlabru].
+
+```{r fixed-table, tab.cap="Posterior summary of the fixed effects (intercept and elevation coefficient) for the PM2.5 concentration model in Portugal.", include=TRUE, echo=TRUE}
+# INLA formula
+form <- y ~ 0 + b0 + elev + f(s, model = spde) 
+
+# Fitting the model
+res <- inla(
+  formula=form,
+  #verbose = TRUE,
+  data = inla.stack.data(stk.full, spde = spde),
+  family = "gaussian",
+  control.predictor = list(A = inla.stack.A(stk.full),
+                           compute = TRUE, link = 1)
+)
+
+res$summary.fixed |>
+  knitr::kable(digits = 3) |>
+  kable_styling(full_width = FALSE)
+```
+
+Table (\@ref(tab:fixed-table)) summarizes the posterior distributions of the fixed effects. The posterior mean of the intercept $\beta_0$ is 8.399~$\mu$g/m$^3$, which represents the mean PM2.5 level over Portugal when elevation is zero. The posterior credible interval for the elevation coefficient excludes zero, indicating a clear association between elevation and PM2.5. The posterior mean is $-0.84$, implying that an increase of 1~km in altitude is associated with a decrease of about 0.84~$\mu$g/m$^3$ in PM$_{2.5}$. 
+
+## Input data and predicted values
+
+Figure (\@ref(fig:pred-plot)) compares the coarse input PM$_{2.5}$ field (left) with the posterior mean predictions from the disaggregation model on the finer grid (right). The disaggregated surface provides a smoother and more detailed representation of spatial variability, while maintaining the main concentration levels and spatial patterns observed in the input data.We also notice that the range of the predicted surface is slightly wider than the range of the input data. This is an important advantage of the disaggregation approach, since it can reveal localized areas with higher or lower concentrations than suggested by the coarse grid, which can be useful for decision makers.
+
+```{r pred-plot, fig.cap="PM$_{2.5}$ over Portugal on the input grid (left) and disaggregated predictions on the finer grid (right)." ,fig.align='center', include=TRUE, echo=TRUE}
+idx<- inla.stack.index(stk.full, 'y.pred')$data
+
+# Prediction
+
+map$pm2p5 <- df$pm2p5
+map_pred$pm2p5 <- res$summary.linear.predictor[idx, "mean"]
+
+p1 <- ggplot(map) +
+  geom_sf(aes(fill = pm2p5), color = NA) +
+  scale_fill_viridis_c(name = "Pm2.5") + 
+  geom_sf(data = boundary, fill = NA, color = "black") +
+  coord_sf(xlim = c(-10, -6), ylim = c(36.5,42.5),
+           expand = FALSE)
+
+p2 <- ggplot(map_pred) +
+  geom_sf(aes(fill = pm2p5), color = NA) +
+  scale_fill_viridis_c(name = "Pm2.5") + 
+  geom_sf(data = boundary, fill = NA, color = "black") +
+  coord_sf(xlim = c(-10, -6), ylim = c(36.5,42.5),
+           expand = FALSE)
+
+p1 <- p1 +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 9),
+    plot.margin = margin(t = 5.5, r = 5.5, b = 18, l = 5.5)
+  )
+
+p2 <- p2 +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 9),
+    plot.margin = margin(t = 5.5, r = 5.5, b = 18, l = 5.5)
+  )
+
+p1 + p2
+```
+
+
+# Multivariate Spatial disaggregation of PM2.5, PM10 and Ozone.
+
+In this section, we extend the previous spatial disaggregation framework to a multivariate setting, jointly modeling PM2.5, PM10, and ozone concentrations in Portugal while increasing the spatial resolution from approximately 10 km to 2 km. We use the same CAMS air quality reanalysis data described in Section \@ref(spatial-dis), now incorporating the additional PM10 and ozone fields. The main difference with respect to the univariate case is that the three pollutants are modeled simultaneously, which allows the model to account for their cross dependence and to borrow strength across variables, improving prediction accuracy.
+
+## Data acquisition and preprocessing
+
+To download the data, we follow the same procedure described in Section \@ref(spatial-data-pre). If the code for the univariate spatial example has already been run, there is no need to repeat the registration or licence acceptance steps. The API request remains the same, except that the $\texttt{variable}$ argument must now include the three pollutants of interest. Specifically, to download PM2.5 PM10, and ozone concentrations for January 2022, we replace the univariate specification with
+
+$$
+\texttt{"variable" = ["particulate_matter_2.5um", "particulate_matter_10um", "ozone"]}.
+$$
+
+All other request arguments are kept unchanged from the univariate case described in Section \@ref(spatial-data-pre). After downloading and unzipping the data, we follow the same preprocessing steps described in Section \@ref(spatial-data-pre). In this case, we have download three $\texttt{nc}$ files and for each file we applied a cleaning process, of grouping the observation in space by the mean and then restricting the area of observation to Portugal. Finally to provide spaital context we also add the country boundaries of Portugal and Spain. Figure (\@ref(fig:mult-plot)) displays the spatial distribution of mean PM2.5, PM10, and ozone over Portugal for January 2022. The original 0.1$^\circ$ resolution of the data can smooth over small areas with high pollution levels, even though these local hotspots may be the most relevant for respiratory health. To better capture this local variability, we propose a multivariate disaggregation model that provides finer resolution estimates and can better support decision making.
+
+```{r mult-plot,fig.align='center' , fig.cap="Mean PM2.5, PM10 and Ozone concentration in Portugal during January 2022. Country boundaries for Portugal and Spain are overlaid for geographic reference." ,include=TRUE, echo=TRUE}
+# Define the squared study region and convert to dataframe
+sq <- ext(-9.7,-6,36.9,42.3)
+
+# Read the dataset and compute mean value (From source)
+r <- rast("../../../../data/pm25/cams.eaq.vra.ENSa.pm2p5.l0.2022-01.nc")
+r_mean <- app(r, mean, na.rm = TRUE)
+r_sq <- crop(r_mean, sq)
+df <- as.data.frame(r_sq, xy = TRUE, na.rm = TRUE)
+df <- df[order(df$y,df$x), ]
+names(df) <- c("longitude","latitude","pm2p5")
+write.csv(df, "../../../../data/pm2p5.csv", row.names = FALSE)
+
+# Read dataset from preprocess file 
+df <- read.csv("../../../../data/pm2p5.csv")
+ 
+# Get portugal and Spain borders
+boundary <- ne_countries(scale="medium", returnclass="sf") |>
+  subset(admin %in% c("Portugal","Spain")) |>
+  st_transform(4326)
+
+# Plot PM2.5 contamination and boundary countries
+ggplot() +
+  geom_spatraster(data = r_sq) +
+  geom_sf(data = boundary, fill = NA, color = "black") +
+  scale_fill_viridis_c(name = "PM2.5") +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 9)
+  ) +
+  coord_sf(xlim = c(xmin(sq), xmax(sq)),
+           ylim = c(ymin(sq), ymax(sq)),
+           expand = FALSE)
+```
+
+
