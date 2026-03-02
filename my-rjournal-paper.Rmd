@@ -369,7 +369,7 @@ All other request arguments are kept unchanged from the univariate case describe
 sq <- ext(-9.7,-6,36.9,42.3)
 
 # Read the dataset and compute mean value (From source)
-r <- rast("../../../../data/pm25/cams.eaq.vra.ENSa.pm2p5.l0.2022-01.nc")
+r_pm25 <- rast("../../../../data/pm25/cams.eaq.vra.ENSa.pm2p5.l0.2022-01.nc")
 r_mean <- app(r, mean, na.rm = TRUE)
 r_sq <- crop(r_mean, sq)
 df <- as.data.frame(r_sq, xy = TRUE, na.rm = TRUE)
