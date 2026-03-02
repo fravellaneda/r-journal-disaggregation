@@ -362,23 +362,44 @@ $$
 \texttt{"variable" = ["particulate_matter_2.5um", "particulate_matter_10um", "ozone"]}.
 $$
 
-All other request arguments are kept unchanged from the univariate case described in Section \@ref(spatial-data-pre). After downloading and unzipping the data, we follow the same preprocessing steps described in Section \@ref(spatial-data-pre). In this case, we have download three $\texttt{nc}$ files and for each file we applied a cleaning process, of grouping the observation in space by the mean and then restricting the area of observation to Portugal. Finally to provide spaital context we also add the country boundaries of Portugal and Spain. Figure (\@ref(fig:mult-plot)) displays the spatial distribution of mean PM2.5, PM10, and ozone over Portugal for January 2022. The original 0.1$^\circ$ resolution of the data can smooth over small areas with high pollution levels, even though these local hotspots may be the most relevant for respiratory health. To better capture this local variability, we propose a multivariate disaggregation model that provides finer resolution estimates and can better support decision making.
+All other request arguments are kept unchanged from the univariate case described in Section \@ref(spatial-data-pre). After downloading and unzipping the data, we follow the same preprocessing steps described in Section \@ref(spatial-data-pre). In this case, we have download three $\texttt{nc}$ files and for each file we applied a cleaning process, of grouping the observation in space by the mean and then restricting the area of observation to Portugal. Finally to provide spaital context we also add the country boundaries of Portugal and Spain. 
 
-```{r mult-plot,fig.align='center' , fig.cap="Mean PM2.5, PM10 and Ozone concentration in Portugal during January 2022. Country boundaries for Portugal and Spain are overlaid for geographic reference." ,include=TRUE, echo=TRUE}
+```{r include=TRUE, echo=TRUE}
 # Define the squared study region and convert to dataframe
 sq <- ext(-9.7,-6,36.9,42.3)
 
-# Read the dataset and compute mean value (From source)
-r_pm25 <- rast("../../../../data/pm25/cams.eaq.vra.ENSa.pm2p5.l0.2022-01.nc")
-r_mean <- app(r, mean, na.rm = TRUE)
-r_sq <- crop(r_mean, sq)
-df <- as.data.frame(r_sq, xy = TRUE, na.rm = TRUE)
-df <- df[order(df$y,df$x), ]
-names(df) <- c("longitude","latitude","pm2p5")
-write.csv(df, "../../../../data/pm2p5.csv", row.names = FALSE)
+# Read the dataset,compute mean value and crop pm2.5 (From source)
+r_pm2p5 <- rast("../../../../data/cams.eaq.vra.ENSa.pm2p5.l0.2022-01.nc")
+r_mean_pm2p5 <- app(r_pm2p5, mean, na.rm = TRUE)
+r_sq_pm2p5 <- crop(r_mean_pm2p5, sq)
 
+# Read the dataset, compute mean value and crop pm10 (From source)
+r_pm10 <- rast("../../../../data/cams.eaq.vra.ENSa.pm10.l0.2022-01.nc")
+r_mean_pm10 <- app(r_pm10, mean, na.rm = TRUE)
+r_sq_pm10 <- crop(r_mean_pm10, sq)
+
+# Read the dataset, compute mean and crop Ozone (From source)
+r_o3 <- rast("../../../../data/cams.eaq.vra.ENSa.o3.l0.2022-01.nc")
+r_mean_o3 <- app(r_o3, mean, na.rm = TRUE)
+r_sq_o3 <- crop(r_mean_o3, sq)
+
+# Clean and standardize the data frame
+pm2p5 <- as.data.frame(r_sq_pm2p5, xy = TRUE, na.rm = TRUE)
+pm10 <- as.data.frame(r_sq_pm10, xy = TRUE, na.rm = TRUE)
+o3 <- as.data.frame(r_sq_o3, xy = TRUE, na.rm = TRUE)
+
+# Merge and organize information
+dfm <- Reduce(function(x, y) merge(x, y, by = c("x", "y")), list(pm2p5, pm10, o3))
+dfm <- dfm[order(dfm$y,dfm$x), ]
+names(dfm) <- c("longitude","latitude","pm2p5","pm10","ozone")
+write.csv(dfm, "../../../../data/mult-data.csv", row.names = FALSE)
+```
+
+Figure (\@ref(fig:mult-plot)) displays the spatial distribution of mean PM2.5, PM10, and ozone over Portugal for January 2022. The original 0.1$^\circ$ resolution of the data can smooth over small areas with high pollution levels, even though these local hotspots may be the most relevant for respiratory health. To better capture this local variability, we propose a multivariate disaggregation model that provides finer resolution estimates and can better support decision making.
+
+```{r mult-plot,fig.width=12, fig.height=5, fig.align='center' , fig.cap="Mean PM2.5, PM10 and Ozone concentration in Portugal during January 2022. Country boundaries for Portugal and Spain are overlaid for geographic reference." ,include=TRUE, echo=TRUE}
 # Read dataset from preprocess file 
-df <- read.csv("../../../../data/pm2p5.csv")
+dfm <- read.csv("../../../../data/mult-data.csv")
  
 # Get portugal and Spain borders
 boundary <- ne_countries(scale="medium", returnclass="sf") |>
@@ -386,8 +407,8 @@ boundary <- ne_countries(scale="medium", returnclass="sf") |>
   st_transform(4326)
 
 # Plot PM2.5 contamination and boundary countries
-ggplot() +
-  geom_spatraster(data = r_sq) +
+p1 <- ggplot() +
+  geom_spatraster(data = r_sq_pm2p5) +
   geom_sf(data = boundary, fill = NA, color = "black") +
   scale_fill_viridis_c(name = "PM2.5") +
   theme(
@@ -396,6 +417,32 @@ ggplot() +
   coord_sf(xlim = c(xmin(sq), xmax(sq)),
            ylim = c(ymin(sq), ymax(sq)),
            expand = FALSE)
+
+# Plot PM10 contamination and boundary countries
+p2 <- ggplot() +
+  geom_spatraster(data = r_sq_pm10) +
+  geom_sf(data = boundary, fill = NA, color = "black") +
+  scale_fill_viridis_c(name = "PM10") +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 9)
+  ) +
+  coord_sf(xlim = c(xmin(sq), xmax(sq)),
+           ylim = c(ymin(sq), ymax(sq)),
+           expand = FALSE)
+
+# Plot Ozone contamination and boundary countries
+p3 <- ggplot() +
+  geom_spatraster(data = r_sq_o3) +
+  geom_sf(data = boundary, fill = NA, color = "black") +
+  scale_fill_viridis_c(name = "Ozone") +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 9)
+  ) +
+  coord_sf(xlim = c(xmin(sq), xmax(sq)),
+           ylim = c(ymin(sq), ymax(sq)),
+           expand = FALSE)
+
+p1+p2+p3
 ```
 
 
