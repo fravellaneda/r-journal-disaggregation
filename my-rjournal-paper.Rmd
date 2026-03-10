@@ -18,7 +18,8 @@ author:
     email: paula.moraga@kaust.edu.sa
     orcid: 0000-0001-5266-0201
 output: 
-  bookdown::html_document2: default
+  bookdown::html_document2:
+    css: styles.css
   rjtools::rjournal_pdf:
     keep_tex: true
     latex_engine: xelatex
@@ -28,6 +29,9 @@ output:
   bookdown::pdf_document2:
     latex_engine: xelatex
 bibliography: RJreferences.bib
+header-includes:
+  - \usepackage{ragged2e}
+  - \justifying
 ---
 
 ```{r setup, include=FALSE}
@@ -58,11 +62,11 @@ pkg <- function(x) {
 
 # Methodology {#sec:methods}
 
-# Spatial disaggregation of PM2.5 concentration {#spatial-dis}
+# Spatial disaggregation of PM2.5 concentration {#sec:spatial-dis}
 
 In this section, we illustrate spatial disaggregation by improving the resolution of PM2.5 concentrations in Portugal from 10km to 2km. We used annual air quality reanalysis data for Portugal provided by the Copernicus Atmosphere Monitoring Service (CAMS) [@copernicus_data], a high-resolution product developed by the European Centre for Medium-Range Weather Forecasts (ECMWF). This publicly accessible dataset, available at https://ads.atmosphere.copernicus.eu/datasets/cams-europe-air-quality-reanalyses, integrates satellite observations and auxiliary information to get estimations of air pollution levels in a very corase resolution.
 
-## Data acquisition and preprocessing {#spatial-data-pre}
+## Data acquisition and preprocessing {#sec:spatial-data-pre}
 
 To download the data, you need to create an account on the Atmospheric Data Store (ADS), accept the terms and conditions, and obtain the "Licence to use Copernicus Products." After setup, the data can be downloaded using the Python API. More details on setting up the API are available at https://ads.atmosphere.copernicus.eu/how-to-api. In our request, the argument $\texttt{variable = ["particulate_matter_2.5um"]}$ selects PM$_{2.5}$ concentrations, $\texttt{model = ["ensemble"]}$ specifies the ensemble product, $\texttt{level = ["0"]}$ indicates the surface level, $\texttt{type = ["validated_reanalysis"]}$ requests the validated reanalysis product, and $\texttt{year = ["2022"]}$ and $\texttt{month = ["01"]}$ restrict the download to January 2022.
 
@@ -108,7 +112,7 @@ Figure (\@ref(fig:pm25-plot)) shows the spatial distribution of mean PM2.5 over 
 
 ## Input grid, spatial mesh, and prediction locations {#sec:mesh}
 
-The first step in the disaggregation workflow is to construct an input grid that matches the support of the observed data. Using the dataframe $\texttt{df}$, we build a squared grid as an $\texttt{sf}$ object with the same spatial extent and dimensions as the original dataset. The second step is to build a spatial mesh that is finer than the initial resolution of the data, as shown on the right side of Figure (@ref(fig:mesh-plot)). This panel displays a portion of the triangulated mesh, represented by black segments, together with the original gridded support, shown in red. Finally, to achieve the target disaggregation from 0.1$^\circ$ to 0.02$^\circ$, we define the prediction points on the desired high resolution grid. The variable $\texttt{spf}$ controls the disaggregation factor. Specifically, setting $\texttt{spf}=5$ increases the resolution within each original cell by a factor of $5 \times 5 = 25$, as illustrated on the left side of Figure (\@ref(fig:mesh-plot)), where red lines denote the original grid and blue dots indicate the prediction locations under the disaggregated scenario.
+The first step in the disaggregation workflow is to construct an input grid that matches the support of the observed data. Using the dataframe $\texttt{df}$, we build a squared grid as an $\texttt{sf}$ object with the same spatial extent and dimensions as the original dataset. The second step is to build a spatial mesh that is finer than the initial resolution of the data, as shown on the right side of Figure (\@ref(fig:mesh-plot)). This panel displays a portion of the triangulated mesh, represented by black segments, together with the original gridded support, shown in red. Finally, to achieve the target disaggregation from 0.1$^\circ$ to 0.02$^\circ$, we define the prediction points on the desired high resolution grid. The variable $\texttt{spf}$ controls the disaggregation factor. Specifically, setting $\texttt{spf}=5$ increases the resolution within each original cell by a factor of $5 \times 5 = 25$, as illustrated on the left side of Figure (\@ref(fig:mesh-plot)), where red lines denote the original grid and blue dots indicate the prediction locations under the disaggregated scenario.
 
 ```{r mesh-plot, fig.cap="Spatial discretization for disaggregation. Original grid support is shown in red. Prediction points for $\texttt{spf}=5$ are shown in blue (left), and a portion of the triangulated mesh is shown in black (right)" ,fig.align='center',include=TRUE, echo=TRUE}
 # Initial squared grid 
@@ -162,7 +166,7 @@ plot(dpdf_sf$geometry, add = TRUE, col = "blue", lwd = 1)
 
 ```
 
-## Covariates
+## Covariates {#sec:cov}
 
 We incorporate high resolution elevation data, at approximately $60$m resolution, from the EuroDEM product maintained by EuroGeographics [@eurogeographics2023eurodem] that is available in the following website https://www.mapsforeurope.org/datasets/euro-dem. Elevation is included as a covariate to relate PM2.5 concentrations with changes in altitude and to improve the explanatory power of the spatial disaggregation model across the study region. To use this covariate within the disaggregation framework, we align its spatial support with both the original CAMS grid and the high resolution prediction grid, by aggregating elevation to the 0.1$^\circ$ input cells and extracting values at the 0.02$^\circ$ prediction locations. Figure (\@ref(fig:elev-plot)) illustrates the resulting elevation focused on Portugal, on the input grid, shown on the left, and at the prediction points, shown on the right. This step can be computationally demanding because EuroDEM is provided at very fine resolution and covers all of Europe, and it must be reprojected to EPSG:4326 before cropping. To reduce computation time, we provide a preprocessed version already reprojected, aggregated and cropped to the study region called $\texttt{eurodemc.tif}$.
 
@@ -179,13 +183,16 @@ We incorporate high resolution elevation data, at approximately $60$m resolution
 # Time consuming: after preprocessing this part takes around 1 minute to be executed
 r_crop <- rast("../../../../data/eurodemc.tif")
 
+# Extract elevation values in the original dataset
 map$elev <- terra::extract(r_crop,map,mean,na.rm = TRUE)$eurodem
 map$elev[is.nan(map$elev)] <- 0
 
+# Create the prediction dataset in sf format
 map_pred <- st_as_sf(st_make_grid(sq, n = c(length(unique(df$longitude)),
                                length(unique(df$latitude)))*spf))
 st_crs(map_pred) <- "EPSG:4326"
 
+# Extract elevation values in the prediction dataset
 map_pred$elev <- terra::extract(r_crop,map_pred,mean,na.rm = TRUE)$eurodem
 map_pred$elev[is.nan(map_pred$elev)] <- 0
 
@@ -225,16 +232,16 @@ p1 + p2
 The main objective of this model is to perform spatial disaggregation by increasing the resolution from 0.1$^\circ$ to 0.02$^\circ$, which corresponds approximately to a change from 10 km to 2 km using `r pkg("INLA")` . We assume the existence of a latent continuous spatial process for PM2.5 that is only observed through aggregated measurements, and it is linked to the observations through the aggregation operator in Equation \@ref(eq:agg-con). The latent PM2.5 field is then defined as
 
 \begin{equation}
-\text{pm}_{2.5}(\mathbf{s}) = \beta_0 + \beta_1\,\text{altitude}(\mathbf{s}) + z(\mathbf{s}) + e(\mathbf{s}) (\#eq:app-pm25)
+\text{pm}_{2.5}(\mathbf{s}) = \beta_0 + \beta_1\,\text{elevation}(\mathbf{s}) + z(\mathbf{s}) + e(\mathbf{s}) (\#eq:app-pm25)
 \end{equation}
 
-where $\beta_0$ is an intercept and $\beta_1$ is the regression coefficient associated with altitude. The term $z(\mathbf{s})$ represents a spatially structured random effect, modeled as a zero mean Gaussian process with a Mat\'ern covariance function, and $e(\mathbf{s})$ is an unstructured error term, modeled as a zero mean Gaussian process that is independent across space.
+where $\beta_0$ is an intercept and $\beta_1$ is the regression coefficient associated with elevation. The term $z(\mathbf{s})$ represents a spatially structured random effect, modeled as a zero mean Gaussian process with a Matérn covariance function, and $e(\mathbf{s})$ is an unstructured error term, modeled as a zero mean Gaussian process that is independent across space.
 
 ## Model inputs for INLA
 
 To fit the model described in Equation \@ref(eq:app-pm25), we use the triangulated mesh defined before in Section \@ref(sec:mesh). We then construct the SPDE representation on this mesh, and build the corresponding projection matrices that link the observation locations and the prediction points to the mesh nodes. Finally, we combine the response, covariates, and latent components into \texttt{INLA} stacks, which are used to perform model estimation and prediction. 
 
-```{r include=TRUE, echo=TRUE}
+```{r input-inla, include=TRUE, echo=TRUE}
 # Construct the SPDE in the spatial mesh
 spde <- inla.spde2.matern(mesh = smesh, alpha = 2, constr = TRUE)
 
@@ -352,19 +359,19 @@ p1 + p2
 
 # Multivariate Spatial disaggregation of PM2.5, PM10 and Ozone.
 
-In this section, we extend the previous spatial disaggregation framework to a multivariate setting, jointly modeling PM2.5, PM10, and ozone concentrations in Portugal while increasing the spatial resolution from approximately 10 km to 2 km. We use the same CAMS air quality reanalysis data described in Section \@ref(spatial-dis), now incorporating the additional PM10 and ozone fields. The main difference with respect to the univariate case is that the three pollutants are modeled simultaneously, which allows the model to account for their cross dependence and to borrow strength across variables, improving prediction accuracy.
+In this section, we extend the previous spatial disaggregation framework to a multivariate setting, jointly modeling PM2.5, PM10, and ozone concentrations in Portugal while increasing the spatial resolution from approximately 10 km to 2 km. We use the same CAMS air quality reanalysis data described in Section \@ref(sec:spatial-dis), now incorporating the additional PM10 and ozone fields. The main difference with respect to the univariate case is that the three pollutants are modeled simultaneously, which allows the model to account for their cross dependence and to borrow strength across variables, improving prediction accuracy.
 
 ## Data acquisition and preprocessing
 
-To download the data, we follow the same procedure described in Section \@ref(spatial-data-pre). If the code for the univariate spatial example has already been run, there is no need to repeat the registration or licence acceptance steps. The API request remains the same, except that the $\texttt{variable}$ argument must now include the three pollutants of interest. Specifically, to download PM2.5 PM10, and ozone concentrations for January 2022, we replace the univariate specification with
+To download the data, we follow the same procedure described in Section \@ref(sec:spatial-data-pre). If the code for the univariate spatial example has already been run, there is no need to repeat the registration or licence acceptance steps. The API request remains the same, except that the $\texttt{variable}$ argument must now include the three pollutants of interest. Specifically, to download PM2.5 PM10, and ozone concentrations for January 2022, we replace the univariate specification with
 
 $$
 \texttt{"variable" = ["particulate_matter_2.5um", "particulate_matter_10um", "ozone"]}.
 $$
 
-All other request arguments are kept unchanged from the univariate case described in Section \@ref(spatial-data-pre). After downloading and unzipping the data, we follow the same preprocessing steps described in Section \@ref(spatial-data-pre). In this case, we have download three $\texttt{nc}$ files and for each file we applied a cleaning process, of grouping the observation in space by the mean and then restricting the area of observation to Portugal. Finally to provide spaital context we also add the country boundaries of Portugal and Spain. 
+All other request arguments are kept unchanged from the univariate case described in Section \@ref(sec:spatial-data-pre). After downloading and unzipping the data, we follow the same preprocessing steps described in Section \@ref(sec:spatial-data-pre). In this case, we have download three $\texttt{nc}$ files and for each file we applied a cleaning process, of grouping the observation in space by the mean and then restricting the area of observation to Portugal. To keep the workflow easy to reproduce, and following the univariate example, we also provide the resulting preprocessed data as $\texttt{mult-data.csv}$, which contains the processed PM2.5, PM10, and ozone values in CSV format.
 
-```{r include=TRUE, echo=TRUE}
+```{r mult-input, include=TRUE, echo=TRUE}
 # Define the squared study region and convert to dataframe
 sq <- ext(-9.7,-6,36.9,42.3)
 
@@ -395,7 +402,7 @@ names(dfm) <- c("longitude","latitude","pm2p5","pm10","ozone")
 write.csv(dfm, "../../../../data/mult-data.csv", row.names = FALSE)
 ```
 
-Figure (\@ref(fig:mult-plot)) displays the spatial distribution of mean PM2.5, PM10, and ozone over Portugal for January 2022. The original 0.1$^\circ$ resolution of the data can smooth over small areas with high pollution levels, even though these local hotspots may be the most relevant for respiratory health. To better capture this local variability, we propose a multivariate disaggregation model that provides finer resolution estimates and can better support decision making.
+Figure (\@ref(fig:mult-plot)) displays the spatial distribution of mean PM2.5, PM10, and ozone over Portugal for January 2022 on the original CAMS grid (about 0.1$^\circ$, roughly 10 km), which is relatively coarse for local-scale interpretation. The maps suggest a positive spatial association between PM2.5 and PM10, with areas of higher PM2.5 generally aligning with higher PM10. In contrast, ozone shows an opposite spatial pattern, indicating a negative spatial association with PM2.5 and PM10, where higher particulate concentrations tend to coincide with lower ozone levels.
 
 ```{r mult-plot,fig.width=12, fig.height=5, fig.align='center' , fig.cap="Mean PM2.5, PM10 and Ozone concentration in Portugal during January 2022. Country boundaries for Portugal and Spain are overlaid for geographic reference." ,include=TRUE, echo=TRUE}
 # Read dataset from preprocess file 
@@ -445,4 +452,78 @@ p3 <- ggplot() +
 p1+p2+p3
 ```
 
+## Covariates
 
+As in Section \@ref(sec:cov), we use elevation from the EuroDEM product [@eurogeographics2023eurodem] as a high resolution covariate, and we align its support with both the 0.1$^\circ$ CAMS input grid and the 0.02$^\circ$ prediction grid. In the multivariate setting, elevation is included to explain shared altitude related variability across PM2.5, PM10, and ozone, and to improve the explanatory power of the joint disaggregation model over Portugal. For reproducibility and to reduce computation time, we use the same preprocessed raster $\texttt{eurodemc.tif}$ described in the univariate case, which is already reprojected to EPSG:4326, aggregated, and cropped to the study region. Therefore, if the univariate example has already been run, this preprocessing step does not need to be repeated.
+
+```{r elev-mult, echo=TRUE, eval=FALSE}
+# Time consuming: after preprocessing this part takes around 1 minute to be executed
+r_crop <- rast("../../../../data/eurodemc.tif")
+
+map$elev <- terra::extract(r_crop,map,mean,na.rm = TRUE)$eurodem
+map$elev[is.nan(map$elev)] <- 0
+
+map_pred <- st_as_sf(st_make_grid(sq, n = c(length(unique(df$longitude)),
+                               length(unique(df$latitude)))*spf))
+st_crs(map_pred) <- "EPSG:4326"
+
+map_pred$elev <- terra::extract(r_crop,map_pred,mean,na.rm = TRUE)$eurodem
+map_pred$elev[is.nan(map_pred$elev)] <- 0
+```
+
+## Model
+
+The multivariate disaggregation model, uses the relation between response variable and the information of fine resolution covariates. This model, as the univariate case, assumes the existence of three independent latent continuous spatial process to express the response variable as a linear combination of this processes using the Linear Model of Corregionalization (LMC). Then for a $M$-multivariate response variable $\mathbf{W}(\mathbf{s}) = [W_1(\mathbf{s}), \dots, W_M(\mathbf{s})]^\top$, we can express this using the LCM as $\mathbf{W}(\textbf{s}) = \mathbf{\Lambda}\mathbf{{U}}(\textbf{s})$ where $\{\mathbf{U}(\textbf{s})\}$ represents $M$ independent latent spatial processes and $\Lambda$ is a $M$ dimensional squared matrix that defined the multivariate correlation structure between response variables. 
+
+For identifiability of the independent processes $\mathbf{U}(\mathbf{s})$, constraints must be imposed on the coregionalization matrix $\mathbf{\Lambda}$ to avoid rotational aliasing, requiring $M \times (M-1)$ restrictions. A common choice is to set $\mathbf{\Lambda}$ as a lower triangular matrix with ones on the diagonal [@geweke1996measuring]. Under these conditions the response variable $\mathbf{W}(\mathbf{s})$ could be expresed as 
+
+\begin{equation*}
+    \begin{bmatrix}
+        W_1(\textbf{s}) \\
+        W_2(\textbf{s}) \\
+        \vdots \\
+        W_M(\textbf{s})
+        \end{bmatrix}
+        =
+        \begin{bmatrix}
+        1 & 0 &  \cdots & 0 \\
+        \lambda_{21} & 1& \cdots & 0 \\
+        \vdots & \vdots & \ddots & \vdots \\
+        \lambda_{M1} & \lambda_{M2} & \cdots & 1
+        \end{bmatrix}
+        \begin{bmatrix}
+        U_1(\textbf{s}) \\
+        U_2(\textbf{s}) \\
+        \vdots \\
+        U_M(\textbf{s})
+    \end{bmatrix}
+(\#eq:lmc-1)
+\end{equation*}
+
+
+This leads to the following system of equations:
+
+\begin{align}
+\begin{split}
+    W_1(\textbf{s}) & = U_1(\textbf{s}), \\[3mm]
+    W_2(\textbf{s}) & = \lambda_{21} U_1 (\textbf{s}) + U_2(\textbf{s}), \\[3mm]
+    & \hspace{0.2cm} \vdots \\[3mm]
+    W_M(\textbf{s}) & =  \lambda_{M1} U_1(\textbf{s}) + \lambda_{M2} (\textbf{s}) + \dots + U_M(\textbf{s}).
+\end{split}
+(\#eq:lmc-2)
+\end{align}
+
+For the application, the main objective of the multivariate disaggregation model is to disaggregate PM2.5, PM10, and ozone by increasing the spatial resolution from $0.1^\circ$ to $0.02^\circ$, which corresponds approximately to a change from $10$ km to $2$ km. We adopt the LMC structure defined in Equations \@ref(eq:lmc-1) and \@ref(eq:lmc-2), and include elevation as a covariate. The resulting model is
+
+\begin{align}
+\begin{split}
+    \text{pm}_{2.5}(\mathbf{s}) & = \alpha_1+\beta_1 \cdot \text{elevation} (\mathbf{s}) + z_{1}(\mathbf{s}) + e_1(\mathbf{s}) \\
+    \text{pm}_{10}(\mathbf{s}) & = \alpha_2 +\beta_2 \cdot \text{elevation} (\mathbf{s}) + \lambda_1 z_{1}(\mathbf{s})+z_2(\mathbf{s})+ e_2(\mathbf{s})\\
+    \text{ozone}(\mathbf{s}) & = \alpha_3 + \beta_3 \cdot \text{elevation} (\mathbf{s}) + \lambda_2 z_{1}(\mathbf{s})+\lambda_3 z_2(\mathbf{s})+z_3(\mathbf{s}) +e_3(\mathbf{s})
+\end{split}
+(\#eq:ap-mult)
+\end{align}
+
+where $\alpha_1$, $\alpha_2$, and $\alpha_3$ are intercepts, and $\beta_1$, $\beta_2$, and $\beta_3$ are regression coefficients for elevation for PM2.5, PM10, and ozone, respectively. The terms $z_1(\mathbf{s})$, $z_2(\mathbf{s})$, and $z_3(\mathbf{s})$ are spatially structured independent random effects, modeled as zero mean Gaussian processes with a Matérn covariance function. The terms $e_1(\mathbf{s})$, $e_2(\mathbf{s})$, and $e_3(\mathbf{s})$ represent unstructured errors, modeled as zero mean Gaussian noise that is independent across space.
+
+## Model inputs for INLA
