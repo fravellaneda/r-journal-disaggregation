@@ -130,7 +130,7 @@ hexpts <- fm_hexagon_lattice(
   edge_len = 0.05
 )
 
-smesh <- fm_mesh_2d(
+mesh <- fm_mesh_2d(
   loc = hexpts,
   max.edge = 0.1,
   offset = 0.05
@@ -158,7 +158,7 @@ dpdf_sf$id <- 1:nrow(dpdf)
 
 # Plots
 par(mfrow = c(1, 2), pty = "s")
-plot(smesh,xlim = c(-9.65,-9.45),ylim = c(36.5,37.5))
+plot(mesh,xlim = c(-9.65,-9.45),ylim = c(36.5,37.5))
 plot(map$geometry, add = TRUE, border = "red", lwd = 2)
 
 plot(map$geometry, border = "red", lwd = 2 ,xlim = c(-9.7,-9.5),ylim = c(36.9,37.1))
@@ -237,18 +237,18 @@ The main objective of this model is to perform spatial disaggregation by increas
 
 where $\beta_0$ is an intercept and $\beta_1$ is the regression coefficient associated with elevation. The term $z(\mathbf{s})$ represents a spatially structured random effect, modeled as a zero mean Gaussian process with a Matérn covariance function, and $e(\mathbf{s})$ is an unstructured error term, modeled as a zero mean Gaussian process that is independent across space.
 
-## Model inputs for INLA
+## Model inputs for INLA {#sec:mod-inp}
 
 To fit the model described in Equation \@ref(eq:app-pm25), we use the triangulated mesh defined before in Section \@ref(sec:mesh). We then construct the SPDE representation on this mesh, and build the corresponding projection matrices that link the observation locations and the prediction points to the mesh nodes. Finally, we combine the response, covariates, and latent components into \texttt{INLA} stacks, which are used to perform model estimation and prediction. 
 
 ```{r input-inla, include=TRUE, echo=TRUE}
 # Construct the SPDE in the spatial mesh
-spde <- inla.spde2.matern(mesh = smesh, alpha = 2, constr = TRUE)
+spde <- inla.spde2.matern(mesh = mesh, alpha = 2, constr = TRUE)
 
 n.ar <- nrow(map) # number of initial regions
-nv <- smesh$n # number of mesh nodes
+nv <- mesh$n # number of mesh nodes
 
-mesh_sf <- st_as_sf(data.frame(x=smesh$loc[,1],y=smesh$loc[,2],id=1:nv),
+mesh_sf <- st_as_sf(data.frame(x=mesh$loc[,1],y=mesh$loc[,2],id=1:nv),
                     coords = c("x","y"),crs="EPSG:4326")
 
 # Projection matrix from initial data to the triangulated mesh
@@ -262,7 +262,7 @@ for (i in 1:n.ar){
 A.m <- as(A.m, "dgCMatrix")
 
 # Projection matrix from the mesh to the predicted points
-A.pr <- inla.spde.make.A(mesh = smesh, loc = dp)
+A.pr <- inla.spde.make.A(mesh = mesh, loc = dp)
 
 # Stack for estimation
 stk.est <- inla.stack(
@@ -451,6 +451,52 @@ p3 <- ggplot() +
 
 p1+p2+p3
 ```
+## Input grid, spatial mesh, and prediction locations {#sec:mult-mesh}
+
+In this section, we replicate the procedure described in \@ref(sec:mesh) for the multivariate dataset $\texttt{dfm}$. Since the steps depend only on the spatial dimensions of the data, we can reuse the same code to construct the input grid, the spatial mesh, and the prediction locations, as in \@ref(sec:mesh). The result spatial mesh, input grid and prediction data result of this step have to looks like in the Figure (\@ref(fig:mesh-plot)).
+
+```{r mesh-mult,include=TRUE, echo=TRUE}
+# Initial squared grid 
+map <- st_as_sf(st_make_grid(sq, n = c(length(unique(dfm$longitude)),
+                               length(unique(dfm$latitude)))))
+st_geometry(map) <- "geometry"
+st_crs(map) <- "EPSG:4326"
+
+# Spatial mesh 
+
+sq_sf <- st_as_sf(as.polygons(sq))
+
+hexpts <- fm_hexagon_lattice(
+  bnd = st_buffer(sq_sf, 0.1), 
+  edge_len = 0.05
+)
+
+mesh <- fm_mesh_2d(
+  loc = hexpts,
+  max.edge = 0.1,
+  offset = 0.05
+)
+
+# prediction points
+
+spf <- 5 # spatial factor
+def <- abs(unique(dfm$latitude)[2]-unique(dfm$latitude)[1])/2 
+
+x <- seq(min(dfm$longitude) - def*((spf-1)/spf),
+         max(dfm$longitude) + def*((spf-1)/spf),
+         length.out = length(unique(dfm$longitude))*spf)
+
+y <- seq(min(dfm$latitude) - def*((spf-1)/spf),
+         max(dfm$latitude) + def*((spf-1)/spf),
+         length.out = length(unique(dfm$latitude))*spf)
+
+dp <- as.matrix(expand.grid(x, y))
+dpdfm <- data.frame(dp)
+names(dpdfm) <- c("x","y")
+
+dpdfm_sf <- st_as_sf(dpdfm,coords = c("x","y"),crs="EPSG:4326")
+dpdfm_sf$id <- 1:nrow(dpdfm)
+```
 
 ## Covariates
 
@@ -463,8 +509,8 @@ r_crop <- rast("../../../../data/eurodemc.tif")
 map$elev <- terra::extract(r_crop,map,mean,na.rm = TRUE)$eurodem
 map$elev[is.nan(map$elev)] <- 0
 
-map_pred <- st_as_sf(st_make_grid(sq, n = c(length(unique(df$longitude)),
-                               length(unique(df$latitude)))*spf))
+map_pred <- st_as_sf(st_make_grid(sq, n = c(length(unique(dfm$longitude)),
+                               length(unique(dfm$latitude)))*spf))
 st_crs(map_pred) <- "EPSG:4326"
 
 map_pred$elev <- terra::extract(r_crop,map_pred,mean,na.rm = TRUE)$eurodem
@@ -527,3 +573,44 @@ For the application, the main objective of the multivariate disaggregation model
 where $\alpha_1$, $\alpha_2$, and $\alpha_3$ are intercepts, and $\beta_1$, $\beta_2$, and $\beta_3$ are regression coefficients for elevation for PM2.5, PM10, and ozone, respectively. The terms $z_1(\mathbf{s})$, $z_2(\mathbf{s})$, and $z_3(\mathbf{s})$ are spatially structured independent random effects, modeled as zero mean Gaussian processes with a Matérn covariance function. The terms $e_1(\mathbf{s})$, $e_2(\mathbf{s})$, and $e_3(\mathbf{s})$ represent unstructured errors, modeled as zero mean Gaussian noise that is independent across space.
 
 ## Model inputs for INLA
+
+For INLA modeling, in addition to the input data, spatial mesh, and prediction points, we require further components for estimation and prediction. These include the SPDE specification, the projection matrices, and the stacks for fitting and prediction. In this section, we describe how these elements are defined for the INLA implementation.
+
+### SPDE espeficication and projection matrix
+
+Here we describe how to define the SPDE model on the triangulated mesh and how to construct the projection matrix. This step is similar to the first part of Section \@ref(sec:mod-inp), but we introduce additional variables to account for the multivariate response, in this case that are 3. 
+
+```{r proj-mult, echo=TRUE, eval=TRUE}
+spde <- inla.spde2.matern(mesh = mesh, alpha = 2, constr = TRUE)
+
+n.ar <- nrow(map) # number of initial regions
+nv <- mesh$n # number of mesh nodes
+n.pp <- 3 # number of response variables
+
+mesh_sf <- st_as_sf(data.frame(x=mesh$loc[,1],y=mesh$loc[,2],id=1:nv),
+                    coords = c("x","y"),crs="EPSG:4326")
+
+# Projection matrix from initial data to the triangulated mesh
+A.m <- matrix(0, n.ar, nv)
+inter <- as.list(st_contains(map[,c()],mesh_sf))
+
+for (i in 1:n.ar){
+  idx <- inter[[i]]
+  A.m[i,idx] <- 1/length(idx)
+}
+A.m <- as(A.m, "dgCMatrix")
+
+# Linear predictor for PM2.5 
+l.1 <- matrix(NA, nrow = n.ar, ncol = n.pp)
+l.1[, 1] <- dfm$pm2p5
+
+# Linear predictor for PM10
+l.2 <- matrix(NA, nrow = n.ar, ncol = n.pp)
+l.2[, 2] <- dfm$pm10
+
+# Linear predictor for Ozone
+l.3 <- matrix(NA, nrow = n.ar, ncol = n.pp)
+l.3[, 3] <- dfm$ozone
+```
+
+
