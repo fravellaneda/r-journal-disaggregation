@@ -62,33 +62,33 @@ pkg <- function(x) {
 
 # Methodology {#sec:methods}
 
-# Spatial disaggregation of PM2.5 concentration {#sec:spatial-dis}
+# Spatial disaggregation of PM2.5 concentration in Portugal {#sec:spatial-dis}
 
 In this section, we illustrate spatial disaggregation by improving the resolution of PM2.5 concentrations in Portugal from 10km to 2km. We used annual air quality reanalysis data for Portugal provided by the Copernicus Atmosphere Monitoring Service (CAMS) [@copernicus_data], a high-resolution product developed by the European Centre for Medium-Range Weather Forecasts (ECMWF). This publicly accessible dataset, available at https://ads.atmosphere.copernicus.eu/datasets/cams-europe-air-quality-reanalyses, integrates satellite observations and auxiliary information to get estimations of air pollution levels in a very corase resolution.
 
 ## Data acquisition and preprocessing {#sec:spatial-data-pre}
 
-To download the data, you need to create an account on the Atmospheric Data Store (ADS), accept the terms and conditions, and obtain the "Licence to use Copernicus Products." After setup, the data can be downloaded using the Python API. More details on setting up the API are available at https://ads.atmosphere.copernicus.eu/how-to-api. In our request, the argument $\texttt{variable = ["particulate_matter_2.5um"]}$ selects PM$_{2.5}$ concentrations, $\texttt{model = ["ensemble"]}$ specifies the ensemble product, $\texttt{level = ["0"]}$ indicates the surface level, $\texttt{type = ["validated_reanalysis"]}$ requests the validated reanalysis product, and $\texttt{year = ["2022"]}$ and $\texttt{month = ["01"]}$ restrict the download to January 2022.
+To download the data, you need to create an account on the Atmospheric Data Store (ADS), accept the terms and conditions, and obtain the "Licence to use Copernicus Products." After setup, the data can be downloaded using the Python API. More details on setting up the API are available at https://ads.atmosphere.copernicus.eu/how-to-api. In our request, the argument $\texttt{variable = ["particulate_matter_2.5um"]}$ selects PM2.5 concentrations, $\texttt{model = ["ensemble"]}$ specifies the ensemble product, $\texttt{level = ["0"]}$ indicates the surface level, $\texttt{type = ["validated_reanalysis"]}$ requests the validated reanalysis product, and $\texttt{year = ["2019"]}$ and $\texttt{month = ["01"]}$ restrict the download to January 2019.
 
-After downloading and unzipping the data, we use the `r pkg("terra")` package to read the $\texttt{nc}$ file. NetCDF (Network Common Data Form) files are widely used for storing multi-dimensional scientific data, such as climate or GIS datasets, because they are self-describing, portable, and efficient for large arrays. The original dataset contains hourly samples for the 31 days of January 2022, totaling 744 observations. Since our focus is on identifying mean trends, we calculated the average PM2.5 concentration for each location. As the original data covers the entire European continent, we cropped the spatial extent to focus specifically on Portugal. To provide better geographical context in our visualizations, we also included the administrative boundaries of Portugal and Spain for clear regional identification using packages `r pkg("rnaturalearth")` and `r pkg("sf")`. Finally for plotting we used `r pkg("ggplot2")`, `r pkg("tidyterra")` and `r pkg("viridis")` packages.
+After downloading and unzipping the data, we use the `r pkg("terra")` package to read the $\texttt{nc}$ file. NetCDF (Network Common Data Form) files are widely used for storing multi-dimensional scientific data, such as climate or GIS datasets, because they are self-describing, portable, and efficient for large arrays. The original dataset contains hourly samples for the 31 days of January 2019, totaling 744 observations. Since our focus is on identifying mean trends, we calculated the average PM2.5 concentration for each location. As the original data covers the entire European continent, we cropped the spatial extent to focus specifically on Portugal. To provide better geographical context in our visualizations, we also included the administrative boundaries of Portugal and Spain for clear regional identification using packages `r pkg("rnaturalearth")` and `r pkg("sf")`. Finally for plotting we used `r pkg("ggplot2")`, `r pkg("tidyterra")` and `r pkg("viridis")` packages.
 
-To simplify replication and avoid the ADS download and NetCDF preprocessing steps, we provide the preprocessed dataset as $\texttt{pm2p5.csv}$, which contains the processed PM2.5 values in CSV format.
+To simplify replication and avoid the ADS download and NetCDF preprocessing steps, we provide the preprocessed dataset as $\texttt{pm2p5_portugal.csv}$, which contains the processed PM2.5 values in CSV format.
 
-```{r pm25-plot,fig.align='center' , fig.cap="Mean PM2.5 concentration in Portugal during January 2022. Country boundaries for Portugal and Spain are overlaid for geographic reference." ,include=TRUE, echo=TRUE}
+```{r pm25-plot,fig.align='center' , fig.cap="Mean PM2.5 concentration in Portugal during January 2019. Country boundaries for Portugal and Spain are overlaid for geographic reference." ,include=TRUE, echo=TRUE}
 # Define the squared study region and convert to dataframe
 sq <- ext(-9.7,-6,36.9,42.3)
 
 # Read the dataset and compute mean value (From source)
-r <- rast("../../../../data/cams.eaq.vra.ENSa.pm2p5.l0.2022-01.nc")
+r <- rast("../../../../data/cams.eaq.vra.ENSa.pm2p5.l0.2019-01.nc")
 r_mean <- app(r, mean, na.rm = TRUE)
 r_sq <- crop(r_mean, sq)
 df <- as.data.frame(r_sq, xy = TRUE, na.rm = TRUE)
 df <- df[order(df$y,df$x), ]
 names(df) <- c("longitude","latitude","pm2p5")
-write.csv(df, "../../../../data/pm2p5.csv", row.names = FALSE)
+write.csv(df, "../../../../data/pm2p5_portugal.csv", row.names = FALSE)
 
 # Read dataset from preprocess file 
-df <- read.csv("../../../../data/pm2p5.csv")
+df <- read.csv("../../../../data/pm2p5_portugal.csv")
  
 # Get portugal and Spain borders
 boundary <- ne_countries(scale="medium", returnclass="sf") |>
@@ -108,7 +108,7 @@ ggplot() +
            expand = FALSE)
 ```
 
-Figure (\@ref(fig:pm25-plot)) shows the spatial distribution of mean PM2.5 over the Portugal for January 2022. Higher concentrations are observed in northern Portugal. The map is provided on the original CAMS grid (about 0.1$^\circ$, roughly 10 km), which is relatively coarse for local-scale interpretation; we therefore target a finer resolution of 0.02$^\circ$ (approximately 2 km) using spatial disaggregation.
+Figure (\@ref(fig:pm25-plot)) shows the spatial distribution of mean PM2.5 over the Portugal for January 2019. Higher concentrations are observed in northern Portugal. The map is provided on the original CAMS grid (about 0.1$^\circ$, roughly 10 km), which is relatively coarse for local-scale interpretation; we therefore target a finer resolution of 0.02$^\circ$ (approximately 2 km) using spatial disaggregation.
 
 ## Input grid, spatial mesh, and prediction locations {#sec:mesh}
 
@@ -182,10 +182,10 @@ We incorporate high resolution elevation data, at approximately $60$m resolution
 
 # Time consuming: after preprocessing this part takes around 1 minute to be executed
 r_crop <- rast("../../../../data/eurodemc.tif")
+r_crop[is.na(r_crop)] <- 0
 
 # Extract elevation values in the original dataset
-map$elev <- terra::extract(r_crop,map,mean,na.rm = TRUE)$eurodem
-map$elev[is.nan(map$elev)] <- 0
+map$elev <- terra::extract(r_crop,map,mean)$eurodem
 
 # Create the prediction dataset in sf format
 map_pred <- st_as_sf(st_make_grid(sq, n = c(length(unique(df$longitude)),
@@ -193,30 +193,27 @@ map_pred <- st_as_sf(st_make_grid(sq, n = c(length(unique(df$longitude)),
 st_crs(map_pred) <- "EPSG:4326"
 
 # Extract elevation values in the prediction dataset
-map_pred$elev <- terra::extract(r_crop,map_pred,mean,na.rm = TRUE)$eurodem
-map_pred$elev[is.nan(map_pred$elev)] <- 0
+map_pred$elev <- terra::extract(r_crop,map_pred,mean)$eurodem
 
+# Plot elevation in the input grid
 p1 <- ggplot(map) +
   geom_sf(aes(fill = elev), color = NA) +
   scale_fill_viridis_c(name = "Elevation (m)") + 
   geom_sf(data = boundary, fill = NA, color = "black") +
   coord_sf(xlim = c(-10, -6), ylim = c(36.5,42.5),
-           expand = FALSE)
-
-p2 <- ggplot(map_pred) +
-  geom_sf(aes(fill = elev), color = NA) +
-  scale_fill_viridis_c(name = "Elevation (m)") + 
-  geom_sf(data = boundary, fill = NA, color = "black") +
-  coord_sf(xlim = c(-10, -6), ylim = c(36.5,42.5),
-           expand = FALSE)
-
-p1 <- p1 +
+           expand = FALSE) +
   theme(
     axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 9),
     plot.margin = margin(t = 5.5, r = 5.5, b = 18, l = 5.5)
   )
 
-p2 <- p2 +
+# Plot elevation in the prediction grid
+p2 <- ggplot(map_pred) +
+  geom_sf(aes(fill = elev), color = NA) +
+  scale_fill_viridis_c(name = "Elevation (m)") + 
+  geom_sf(data = boundary, fill = NA, color = "black") +
+  coord_sf(xlim = c(-10, -6), ylim = c(36.5,42.5),
+           expand = FALSE) +
   theme(
     axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 9),
     plot.margin = margin(t = 5.5, r = 5.5, b = 18, l = 5.5)
@@ -295,10 +292,12 @@ stk.full <- inla.stack(stk.est, stk.pred)
 Now, we translate Equation \@ref(eq:app-pm25) into an $\texttt{INLA}$ formula, where the symbol $\texttt{~}$ defines the linear predictor for the response $y$. The term $\texttt{0 + b0}$ adds an explicit intercept, with $\texttt{b0}$ being a column of ones included in the stack. The term $\texttt{elev}$ represents elevation as a fixed effect, and $\texttt{f(s, model = spde)}$ specifies the spatial random effect on the mesh using the SPDE model. We fit the model with $\texttt{inla()}$ using the stacked data object $\texttt{stk.full}$, and set $\texttt{family = "gaussian"}$ because $y$ is continuous. If the response $y$ is non Gaussian, such as counts modeled with a Poisson variable, the model specification need to be adapted. For these settings, we recomend using the package `r pkg("inlabru")` along `r pkg("INLA")` that provides a workflow to deal with that kind of data [@inlabru].
 
 ```{r fixed-table, tab.cap="Posterior summary of the fixed effects (intercept and elevation coefficient) for the PM2.5 concentration model in Portugal.", include=TRUE, echo=TRUE}
+# Time consuming: This preprocessing takes roughly 5 minutes to be executed
+
 # INLA formula
 form <- y ~ 0 + b0 + elev + f(s, model = spde) 
 
-# Fitting the model
+# Fitting and prediction 
 res <- inla(
   formula=form,
   #verbose = TRUE,
@@ -308,62 +307,64 @@ res <- inla(
                            compute = TRUE, link = 1)
 )
 
+# Summary for the fixed effects
 res$summary.fixed |>
   knitr::kable(digits = 3) |>
   kable_styling(full_width = FALSE)
 ```
 
-Table (\@ref(tab:fixed-table)) summarizes the posterior distributions of the fixed effects. The posterior mean of the intercept $\beta_0$ is 8.399~$\mu$g/m$^3$, which represents the mean PM2.5 level over Portugal when elevation is zero. The posterior credible interval for the elevation coefficient excludes zero, indicating a clear association between elevation and PM2.5. The posterior mean is $-0.84$, implying that an increase of 1~km in altitude is associated with a decrease of about 0.84~$\mu$g/m$^3$ in PM$_{2.5}$. 
+Table (\@ref(tab:fixed-table)) summarizes the posterior distributions of the fixed effects. The posterior mean of the intercept $\beta_0$ is 8.29~$\mu$g/m$^3$, which represents the mean PM2.5 level over Portugal when elevation is zero. The posterior credible interval for the elevation coefficient excludes zero, indicating a clear association between elevation and PM2.5. The posterior mean is $-0.24$, implying that an increase of 1~km in altitude is associated with a decrease of about 0.24~$\mu$g/m$^3$ in PM2.5. 
 
 ## Input data and predicted values
 
-Figure (\@ref(fig:pred-plot)) compares the coarse input PM$_{2.5}$ field (left) with the posterior mean predictions from the disaggregation model on the finer grid (right). The disaggregated surface provides a smoother and more detailed representation of spatial variability, while maintaining the main concentration levels and spatial patterns observed in the input data.We also notice that the range of the predicted surface is slightly wider than the range of the input data. This is an important advantage of the disaggregation approach, since it can reveal localized areas with higher or lower concentrations than suggested by the coarse grid, which can be useful for decision makers.
+Figure (\@ref(fig:pred-plot)) compares the coarse input PM2.5 field (left) with the posterior mean predictions from the disaggregation model on the finer grid (right). The disaggregated surface provides a smoother and more detailed representation of spatial variability, while maintaining the main concentration levels and spatial patterns observed in the input data.We also notice that the range of the predicted surface is slightly wider than the range of the input data. This is an important advantage of the disaggregation approach, since it can reveal localized areas with higher or lower concentrations than suggested by the coarse grid, which can be useful for decision makers.
 
-```{r pred-plot, fig.cap="PM$_{2.5}$ over Portugal on the input grid (left) and disaggregated predictions on the finer grid (right)." ,fig.align='center', include=TRUE, echo=TRUE}
+```{r pred-plot, fig.cap="PM2.5 over Portugal on the input grid (left) and disaggregated predictions on the finer grid (right)." ,fig.align='center', include=TRUE, echo=TRUE}
+# get indexes of the response variable
 idx<- inla.stack.index(stk.full, 'y.pred')$data
 
-# Prediction
-
+# Input grid
 map$pm2p5 <- df$pm2p5
+
+# Prediction
 map_pred$pm2p5 <- res$summary.linear.predictor[idx, "mean"]
 
+# Plot for input grid
 p1 <- ggplot(map) +
   geom_sf(aes(fill = pm2p5), color = NA) +
   scale_fill_viridis_c(name = "Pm2.5") + 
   geom_sf(data = boundary, fill = NA, color = "black") +
   coord_sf(xlim = c(-10, -6), ylim = c(36.5,42.5),
-           expand = FALSE)
+           expand = FALSE) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 9),
+    plot.margin = margin(t = 5.5, r = 5.5, b = 18, l = 5.5)
+  )
 
+# Plot for predictions
 p2 <- ggplot(map_pred) +
   geom_sf(aes(fill = pm2p5), color = NA) +
   scale_fill_viridis_c(name = "Pm2.5") + 
   geom_sf(data = boundary, fill = NA, color = "black") +
   coord_sf(xlim = c(-10, -6), ylim = c(36.5,42.5),
-           expand = FALSE)
-
-p1 <- p1 +
+           expand = FALSE) +
   theme(
     axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 9),
     plot.margin = margin(t = 5.5, r = 5.5, b = 18, l = 5.5)
   )
 
-p2 <- p2 +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 9),
-    plot.margin = margin(t = 5.5, r = 5.5, b = 18, l = 5.5)
-  )
-
+# Combine plots
 p1 + p2
 ```
 
 
-# Multivariate Spatial disaggregation of PM2.5, PM10 and Ozone.
+# Multivariate Spatial disaggregation of PM2.5, PM10 and Ozone concentrations in Portugal.
 
 In this section, we extend the previous spatial disaggregation framework to a multivariate setting, jointly modeling PM2.5, PM10, and ozone concentrations in Portugal while increasing the spatial resolution from approximately 10 km to 2 km. We use the same CAMS air quality reanalysis data described in Section \@ref(sec:spatial-dis), now incorporating the additional PM10 and ozone fields. The main difference with respect to the univariate case is that the three pollutants are modeled simultaneously, which allows the model to account for their cross dependence and to borrow strength across variables, improving prediction accuracy.
 
 ## Data acquisition and preprocessing
 
-To download the data, we follow the same procedure described in Section \@ref(sec:spatial-data-pre). If the code for the univariate spatial example has already been run, there is no need to repeat the registration or licence acceptance steps. The API request remains the same, except that the $\texttt{variable}$ argument must now include the three pollutants of interest. Specifically, to download PM2.5 PM10, and ozone concentrations for January 2022, we replace the univariate specification with
+To download the data, we follow the same procedure described in Section \@ref(sec:spatial-data-pre). If the code for the univariate spatial example has already been run, there is no need to repeat the registration or licence acceptance steps. The API request remains the same, except that the $\texttt{variable}$ argument must now include the three pollutants of interest. Specifically, to download PM2.5 PM10, and ozone concentrations for January 2019, we replace the univariate specification with
 
 $$
 \texttt{"variable" = ["particulate_matter_2.5um", "particulate_matter_10um", "ozone"]}.
@@ -376,19 +377,24 @@ All other request arguments are kept unchanged from the univariate case describe
 sq <- ext(-9.7,-6,36.9,42.3)
 
 # Read the dataset,compute mean value and crop pm2.5 (From source)
-r_pm2p5 <- rast("../../../../data/cams.eaq.vra.ENSa.pm2p5.l0.2022-01.nc")
+r_pm2p5 <- rast("../../../../data/cams.eaq.vra.ENSa.pm2p5.l0.2019-01.nc")
 r_mean_pm2p5 <- app(r_pm2p5, mean, na.rm = TRUE)
 r_sq_pm2p5 <- crop(r_mean_pm2p5, sq)
 
 # Read the dataset, compute mean value and crop pm10 (From source)
-r_pm10 <- rast("../../../../data/cams.eaq.vra.ENSa.pm10.l0.2022-01.nc")
+r_pm10 <- rast("../../../../data/cams.eaq.vra.ENSa.pm10.l0.2019-01.nc")
 r_mean_pm10 <- app(r_pm10, mean, na.rm = TRUE)
 r_sq_pm10 <- crop(r_mean_pm10, sq)
 
 # Read the dataset, compute mean and crop Ozone (From source)
-r_o3 <- rast("../../../../data/cams.eaq.vra.ENSa.o3.l0.2022-01.nc")
+r_o3 <- rast("../../../../data/cams.eaq.vra.ENSa.o3.l0.2019-01.nc")
 r_mean_o3 <- app(r_o3, mean, na.rm = TRUE)
 r_sq_o3 <- crop(r_mean_o3, sq)
+
+# Clean and standardize the data frame
+pm2p5 <- as.data.frame(r_sq_pm2p5, xy = TRUE, na.rm = TRUE)
+pm10 <- as.data.frame(r_sq_pm10, xy = TRUE, na.rm = TRUE)
+o3 <- as.data.frame(r_sq_o3, xy = TRUE, na.rm = TRUE)
 
 # Clean and standardize the data frame
 pm2p5 <- as.data.frame(r_sq_pm2p5, xy = TRUE, na.rm = TRUE)
@@ -402,11 +408,16 @@ names(dfm) <- c("longitude","latitude","pm2p5","pm10","ozone")
 write.csv(dfm, "../../../../data/mult-data.csv", row.names = FALSE)
 ```
 
-Figure (\@ref(fig:mult-plot)) displays the spatial distribution of mean PM2.5, PM10, and ozone over Portugal for January 2022 on the original CAMS grid (about 0.1$^\circ$, roughly 10 km), which is relatively coarse for local-scale interpretation. The maps suggest a positive spatial association between PM2.5 and PM10, with areas of higher PM2.5 generally aligning with higher PM10. In contrast, ozone shows an opposite spatial pattern, indicating a negative spatial association with PM2.5 and PM10, where higher particulate concentrations tend to coincide with lower ozone levels.
+Figure (\@ref(fig:mult-plot)) displays the spatial distribution of mean PM2.5, PM10, and ozone over Portugal for January 2019 on the original CAMS grid (about 0.1$^\circ$, roughly 10 km), which is relatively coarse for local-scale interpretation. The maps suggest a positive spatial association between PM2.5 and PM10, with areas of higher PM2.5 generally aligning with higher PM10. In contrast, ozone shows an opposite spatial pattern, indicating a negative spatial association with PM2.5 and PM10, where higher particulate concentrations tend to coincide with lower ozone levels.
 
-```{r mult-plot,fig.width=12, fig.height=5, fig.align='center' , fig.cap="Mean PM2.5, PM10 and Ozone concentration in Portugal during January 2022. Country boundaries for Portugal and Spain are overlaid for geographic reference." ,include=TRUE, echo=TRUE}
+```{r mult-plot,fig.width=12, fig.height=5, fig.align='center' , fig.cap="Mean PM2.5, PM10 and Ozone concentration in Portugal during January 2019. Country boundaries for Portugal and Spain are overlaid for geographic reference." ,include=TRUE, echo=TRUE}
 # Read dataset from preprocess file 
 dfm <- read.csv("../../../../data/mult-data.csv")
+
+# Save it as rast files for plotting
+r_sq_pm2p5 <- rast(dfm[,c("longitude","latitude","pm2p5")])
+r_sq_pm10 <- rast(dfm[,c("longitude","latitude","pm10")])
+r_sq_o3 <- rast(dfm[,c("longitude","latitude","ozone")])
  
 # Get portugal and Spain borders
 boundary <- ne_countries(scale="medium", returnclass="sf") |>
@@ -464,21 +475,27 @@ st_crs(map) <- "EPSG:4326"
 
 # Spatial mesh 
 
+# convert the square in a sf object
 sq_sf <- st_as_sf(as.polygons(sq))
 
+# Create equally space points for the emsh
 hexpts <- fm_hexagon_lattice(
   bnd = st_buffer(sq_sf, 0.1), 
   edge_len = 0.05
 )
 
+# Create the mesh based in the previous points 
 mesh <- fm_mesh_2d(
   loc = hexpts,
   max.edge = 0.1,
   offset = 0.05
 )
 
-# prediction points
+# mesh as a sf object
+mesh_sf <- st_as_sf(data.frame(x=mesh$loc[,1],y=mesh$loc[,2],id=1:mesh$n),
+                    coords = c("x","y"),crs="EPSG:4326")
 
+# prediction points
 spf <- 5 # spatial factor
 def <- abs(unique(dfm$latitude)[2]-unique(dfm$latitude)[1])/2 
 
@@ -502,19 +519,25 @@ dpdfm_sf$id <- 1:nrow(dpdfm)
 
 As in Section \@ref(sec:cov), we use elevation from the EuroDEM product [@eurogeographics2023eurodem] as a high resolution covariate, and we align its support with both the 0.1$^\circ$ CAMS input grid and the 0.02$^\circ$ prediction grid. In the multivariate setting, elevation is included to explain shared altitude related variability across PM2.5, PM10, and ozone, and to improve the explanatory power of the joint disaggregation model over Portugal. For reproducibility and to reduce computation time, we use the same preprocessed raster $\texttt{eurodemc.tif}$ described in the univariate case, which is already reprojected to EPSG:4326, aggregated, and cropped to the study region. Therefore, if the univariate example has already been run, this preprocessing step does not need to be repeated.
 
-```{r elev-mult, echo=TRUE, eval=FALSE}
+```{r elev-mult, echo=TRUE, eval=TRUE}
 # Time consuming: after preprocessing this part takes around 1 minute to be executed
 r_crop <- rast("../../../../data/eurodemc.tif")
+r_crop[is.na(r_crop)] <- 0
 
-map$elev <- terra::extract(r_crop,map,mean,na.rm = TRUE)$eurodem
-map$elev[is.nan(map$elev)] <- 0
+# r_map <- rast("../../../../data/eurodemp.tif")
+# mesh_elev <- terra::extract(r_crop,mesh_sf)$eurodem
+# mesh_elev[is.na(mesh_elev)] <- 0
 
+# Extract elevation values in the original dataset
+map$elev <- terra::extract(r_crop,map,mean)$eurodem
+
+# Create the prediction dataset in sf format
 map_pred <- st_as_sf(st_make_grid(sq, n = c(length(unique(dfm$longitude)),
                                length(unique(dfm$latitude)))*spf))
 st_crs(map_pred) <- "EPSG:4326"
 
-map_pred$elev <- terra::extract(r_crop,map_pred,mean,na.rm = TRUE)$eurodem
-map_pred$elev[is.nan(map_pred$elev)] <- 0
+# Extract elevation values in the prediction dataset
+map_pred$elev <- terra::extract(r_crop,map_pred,mean)$eurodem
 ```
 
 ## Model
@@ -578,17 +601,16 @@ For INLA modeling, in addition to the input data, spatial mesh, and prediction p
 
 ### SPDE espeficication and projection matrix
 
-Here we describe how to define the SPDE model on the triangulated mesh and how to construct the projection matrix. This step is similar to the first part of Section \@ref(sec:mod-inp), but we introduce additional variables to account for the multivariate response, in this case that are 3. 
+Here we describe how to define the SPDE model on the triangulated mesh and how to construct the projection matrix. This step is similar to the first part of Section @ref(sec:mod-inp), but we extend the setup to the multivariate case with three responses. In particular, we define three response objects, $\texttt{y1}$, $\texttt{y2}$, and $\texttt{y3}$, as matrices of dimension $n_{\mathrm{ar}} \times n_{\mathrm{pp}}$, where $n_{\mathrm{ar}}$ is the number of observed cells and $n_{\mathrm{pp}}=3$ is the number of pollutants. Each matrix is filled with $\texttt{NA}$ values, except for the column corresponding to the pollutant being modeled, which is populated with the observed values. For example, $\texttt{y1}$ stores PM2.5 in the first column, $\texttt{y2}$ stores PM10 in the second column, and $\texttt{y3}$ stores ozone in the third column. This construction matches the multivariate linear predictor used in the stacking and projection steps.
 
 ```{r proj-mult, echo=TRUE, eval=TRUE}
-spde <- inla.spde2.matern(mesh = mesh, alpha = 2, constr = TRUE)
+spde <- inla.spde2.matern(mesh = mesh,
+                          alpha = 2,
+                          constr = TRUE)
 
 n.ar <- nrow(map) # number of initial regions
 nv <- mesh$n # number of mesh nodes
 n.pp <- 3 # number of response variables
-
-mesh_sf <- st_as_sf(data.frame(x=mesh$loc[,1],y=mesh$loc[,2],id=1:nv),
-                    coords = c("x","y"),crs="EPSG:4326")
 
 # Projection matrix from initial data to the triangulated mesh
 A.m <- matrix(0, n.ar, nv)
@@ -600,17 +622,327 @@ for (i in 1:n.ar){
 }
 A.m <- as(A.m, "dgCMatrix")
 
-# Linear predictor for PM2.5 
-l.1 <- matrix(NA, nrow = n.ar, ncol = n.pp)
-l.1[, 1] <- dfm$pm2p5
+# Projection matrix for prediction locations
+A.pr <- inla.spde.make.A(mesh = mesh, loc = dp)
 
-# Linear predictor for PM10
-l.2 <- matrix(NA, nrow = n.ar, ncol = n.pp)
-l.2[, 2] <- dfm$pm10
+# First response matrix for PM2.5 
+y1 <- matrix(NA, nrow = n.ar, ncol = n.pp)
+y1[, 1] <- dfm$pm2p5
 
-# Linear predictor for Ozone
-l.3 <- matrix(NA, nrow = n.ar, ncol = n.pp)
-l.3[, 3] <- dfm$ozone
+# Second response matrix for PM10
+y2 <- matrix(NA, nrow = n.ar, ncol = n.pp)
+y2[, 2] <- dfm$pm10
+
+# Third response matrix for Ozone
+y3 <- matrix(NA, nrow = n.ar, ncol = n.pp)
+y3[, 3] <- dfm$ozone
+```
+
+### Estimation and prediction stacks
+
+Now we create the stack for estimation. In contrast to the univariate case in Section \@ref(sec:mod-inp), the multivariate model requires separate stacks for each response variable. We therefore build three auxiliary stacks, $\texttt{stk.y1}$, $\texttt{stk.y2}$, and $\texttt{stk.y3}$, corresponding to PM2.5, PM10, and ozone, respectively, following the dependence structure in Equation (\@ref(#eq:lmc-2)). Each stack specifies the response vector, the projection matrices $\texttt{A}$ that link observations to the shared and pollutant specific latent fields, and the corresponding fixed effects, including elevation and an intercept. Finally, we combine these auxiliary stacks into a single estimation object, $\texttt{stk.est}$, using $\texttt{inla.stack(stk.y1, stk.y2, stk.y3)}$.
+
+```{r est-stk-mult, echo=TRUE, eval=TRUE}
+# Create the stack for y1 (PM2.5)
+stk.y1 <- inla.stack(
+  data = list(y = y1),
+  A = list(A.m,A.m,1),
+  effects = list(
+    intercept.y1 = rep(1, nv),
+    spatial.field.sh = 1:nv,
+    elev.1 = map$elev/1000 # convert m to km 
+  ),
+  tag = "y1")
+
+# Create the stack for y2 (PM10)
+stk.y2 <- inla.stack(
+  data = list(y = y2),
+  A = list(A.m,A.m,A.m,1),
+  effects = list(
+    intercept.y2 = rep(1, nv),
+    sh.copy.y2 = 1:nv,
+    spatial.field.y2 = 1:nv,
+    elev.2 = map$elev/1000 # convert m to km 
+  ),
+  tag = "y2")
+
+# Create the stack for y3 (Ozone)
+stk.y3 <- inla.stack(
+  data = list(y = y3),
+  A = list(A.m,A.m,A.m,A.m,1),
+  effects = list(
+    intercept.y3 = rep(1, nv),
+    sh.copy.y3 = 1:nv,
+    y2.copy.y3 = 1:nv,
+    spatial.field.y3 = 1:nv,
+    elev.3 = map$elev/1000 # convert m to km 
+  ),
+  tag = "y3")
+
+stk.est <- inla.stack(stk.y1, stk.y2, stk.y3)
+```
+
+Then we construct the prediction stack on the fine grid. We define three auxiliary prediction stacks, $\texttt{stk.y1.pred}$, $\texttt{stk.y2.pred}$, and $\texttt{stk.y3.pred}$, with responses set to $\texttt{NA}$ because predictions are required at locations where $y$ is unobserved. In contrast to the estimation stacks, the projection matrix is now $\texttt{A.pr}$, which links the prediction locations to the mesh, and elevation is taken from $\texttt{map_pred}$. We combine the three auxiliary stacks into $\texttt{stk.pred}$, and then merge estimation and prediction into a single object, $\texttt{stk.full}$.
+
+```{r pred-stk-mult, echo=TRUE, eval=TRUE}
+# Stack for predicting PM2.5
+stk.y1.pred <- inla.stack(tag = "y1.pred",
+                         data = list(y = matrix(NA, nrow=nrow(dp),ncol=n.pp)),
+                         A = list(A.pr, A.pr, 1),
+                         effects = list(
+                           intercept.y1 = rep(1, nv),
+                           spatial.field.sh = 1:nv,
+                           elev.1 = map_pred$elev/1000 # convert m to km 
+                         ))
+
+# Stack for predicting PM10
+stk.y2.pred <- inla.stack(tag = "y2.pred",
+                         data = list(y = matrix(NA, nrow=nrow(dp),ncol=n.pp)),
+                         A = list(A.pr, A.pr, A.pr, 1),
+                         effects = list(
+                           intercept.y2 = rep(1, nv),
+                           sh.copy.y2 = 1:nv,
+                           spatial.field.y2 = 1:nv,
+                           elev.2 = map_pred$elev/1000 # convert m to km 
+                         ))
+
+# Stack for predicting Ozone
+stk.y3.pred <- inla.stack(tag = "y3.pred",
+                         data = list(y = matrix(NA, nrow=nrow(dp),ncol=n.pp)),
+                         A = list(A.pr, A.pr, A.pr, A.pr, 1),
+                         effects = list(
+                           intercept.y3 = rep(1, nv),
+                           sh.copy.y3 = 1:nv,
+                           y2.copy.y3 = 1:nv,
+                           spatial.field.y3 = 1:nv,
+                           elev.3 = map_pred$elev/1000 # convert m to km 
+                         ))
+
+# stack for prediction
+stk.pred <- inla.stack(stk.y1.pred, stk.y2.pred, stk.y3.pred)
+
+# stack for estimation + prediction
+stk.full <- inla.stack(stk.est, stk.pred)
+```
+
+## Fitting the multivariate model with INLA
+
+To fit the multivariate model in Equation \@ref(eq:ap-mult), we define the $\texttt{INLA}$ formula $\texttt{formMult}$. Compared with the univariate case, the main differences are that we include pollutant specific fixed effects, namely three intercepts, $\texttt{intercept.y1}$, $\texttt{intercept.y2}$ and $\texttt{intercept.y3}$, and three elevation effects, $\texttt{elev.1}$, $\texttt{elev.2}$ and $\texttt{elev.3}$, and we represent cross dependence through shared and copied spatial fields. The term $\texttt{f(spatial.field.sh, model = spde)}$ defines a shared spatial component, while the clauses $\texttt{copy = "spatial.field.sh"}$ and $\texttt{copy = "spatial.field.y2"}$ introduce scaled copies of previously defined fields, with $\texttt{fixed = FALSE}$ indicating that the scaling parameters are estimated. We then fit the model with $\texttt{inla()}$ using the combined stack $\texttt{stk.full}$. Since all three responses are continuous, we set $\texttt{family = rep("gaussian", 3)}$. Finally, we summarize the fixed effects in a table. For additional details on multivariate modeling in $\texttt{INLA}$, see [@palmi-perales2019multivariate].
+
+```{r tab-fixed-mult, tab.cap="Posterior summary of the fixed effects (intercept and elevation coefficient) for the multivariate model of PM2.5, PM10 and Ozone concentrations in Portugal.", echo=TRUE, eval=TRUE}
+# Time consuming: This code can  take around 40 minutes to run.
+# To monitor progress, uncomment the line `verbose = TRUE` in the `inla()` call.
+
+# INLA formula
+formMult <- y ~ 0 + intercept.y1 + intercept.y2 + intercept.y3 +
+  elev.1 + elev.2 + elev.3 +
+  f(spatial.field.sh, model = spde) +
+  f(sh.copy.y2, copy = "spatial.field.sh", fixed = FALSE) +
+  f(spatial.field.y2, model = spde) +
+  f(sh.copy.y3, copy = "spatial.field.sh", fixed = FALSE) +
+  f(y2.copy.y3, copy = "spatial.field.y2", fixed = FALSE) +
+  f(spatial.field.y3, model = spde)
+
+# Fitting and prediction
+# resM <- inla(
+#  formula=formMult,
+#  #verbose = TRUE,
+#  data = inla.stack.data(stk.full, spde = spde),
+#  family = rep("gaussian", 3),
+#  control.predictor = list(A = inla.stack.A(stk.full),
+#                           compute = TRUE, link = 1),
+#  control.compute = list(config=TRUE,return.marginals.predictor = TRUE),
+# )
+
+# saveRDS(resM, file = "../../../../data/models/mult-model.rds")
+resM <- readRDS("../../../../data/models/mult-model.rds")
+
+# Summary of the fixed effects of the model
+resM$summary.fixed |>
+  knitr::kable(digits = 3) |>
+  kable_styling(full_width = FALSE)
+```
+
+Table (\@ref(tab:tab-fixed-mult)) summarizes the posterior distributions of the fixed effects in the multivariate model. The intercepts represent the baseline mean levels at zero elevation, with posterior means of 8.29~$\mu$g/m$^3$ for PM2.5, 13.46~$\mu$g/m$^3$ for PM10, and 54.23~$\mu$g/m$^3$ for ozone. Elevation shows a negative association with particulate matter, since the posterior credible intervals for $\texttt{elev.1}$ and $\texttt{elev.2}$ exclude zero, with posterior means of $-0.24$ and $-0.26$, implying decreases of about 0.24 and 0.26~$\mu$g/m$^3$ per 1~km increase in altitude for PM2.5 and PM10, respectively. In contrast, ozone shows a positive association with elevation, with a posterior mean of 1.6 and a credible interval that also excludes zero, indicating an increase of about 1.6~$\mu$g/m$^3$ per 1~km increase in altitude.
+
+## Input data and predicted values for multivariate data
+
+After fitting the model, Figure (\@ref(fig:pred-plot-mult)) shows the three pollutants together, with PM2.5, PM10, and ozone on the coarse CAMS grid in the first row and the corresponding posterior mean predictions on the finer grid in the second row. As in the univariate case, the finer grid predictions shows more local spatial variation, and the predicted values can span a slightly wider range than the coarse inputs, which helps bring out possible hotspots or cleaner areas that are hidden at 0.1$^\circ$ resolution. The main added value here is that the three pollutants are modeled jointly, so the predictions also use the spatial dependence between pollutants, allowing the model to borrow information across PM2.5, PM10, and ozone and produce a more coherent multivariate disaggregation.
+
+```{r pred-plot-mult,fig.width=12, fig.height=10, fig.cap="Observed and disaggregated pollutant fields over Portugal. The top row shows the observed mean PM2.5, PM10, and ozone on the coarse CAMS grid, and the bottom row shows the corresponding posterior mean predictions from the multivariate disaggregation model on the finer grid. Country boundaries are overlaid for reference." ,fig.align='center', include=TRUE, echo=TRUE}
+
+# get indexes of each response variable 
+idx.y1 <- inla.stack.index(stk.full, 'y1.pred')$data
+idx.y2 <- inla.stack.index(stk.full, 'y2.pred')$data
+idx.y3 <- inla.stack.index(stk.full, 'y3.pred')$data
+
+# Input grid
+map$pm2p5 <- dfm$pm2p5
+map$pm10 <- dfm$pm10
+map$ozone <- dfm$ozone
+
+# Prediction
+map_pred$pm2p5 <- resM$summary.linear.predictor[idx.y1, "mean"]
+map_pred$pm10 <- resM$summary.linear.predictor[idx.y2, "mean"]
+map_pred$ozone <- resM$summary.linear.predictor[idx.y3, "mean"]
+
+# Plots
+vars <- c("pm2p5", "pm10", "ozone")
+labs <- c("PM2.5", "PM10", "Ozone")
+
+plot_list_obs  <- vector("list", length(vars))
+plot_list_pred <- vector("list", length(vars))
+
+for (i in seq_along(vars)) {
+  plot_list_obs[[i]] <- ggplot(map) +
+    geom_sf(aes(fill = .data[[vars[i]]]), color = NA) +
+    scale_fill_viridis_c(name = labs[i]) +
+    geom_sf(data = boundary, fill = NA, color = "black") +
+    coord_sf(
+      xlim = c(-10, -6),
+      ylim = c(36.5, 42.5),
+      expand = FALSE
+    ) +
+    ggtitle(paste("Observed", labs[i])) +
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 9),
+      plot.margin = margin(t = 5.5, r = 5.5, b = 18, l = 5.5)
+    )
+
+  plot_list_pred[[i]] <- ggplot(map_pred) +
+    geom_sf(aes(fill = .data[[vars[i]]]), color = NA) +
+    scale_fill_viridis_c(name = labs[i]) +
+    geom_sf(data = boundary, fill = NA, color = "black") +
+    coord_sf(
+      xlim = c(-10, -6),
+      ylim = c(36.5, 42.5),
+      expand = FALSE
+    ) +
+    ggtitle(paste("Predicted", labs[i])) +
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 9),
+      plot.margin = margin(t = 5.5, r = 5.5, b = 18, l = 5.5)
+    )
+}
+
+p_obs  <- wrap_plots(plot_list_obs,  ncol = 3)
+p_pred <- wrap_plots(plot_list_pred, ncol = 3)
+
+p_obs / p_pred
+```
+
+# Spatio-temporal disaggregation of Aerosol Optical Depth (AOD) in India {#sec:spatio-temp}
+
+In this section, we extend the univariate spatial disaggregation framework to a spatio-temporal setting using Aerosol Optical Depth (AOD) at 550 nm over India. The goal is to increase the spatial resolution from $0.75^\circ$ to $0.25^\circ$, which corresponds approximately to 84 km and 28 km near the equator, and to refine the temporal resolution from 3-hourly to hourly. We use AOD data from the Atmospheric Composition Reanalysis 4 (EAC4) produced by the European Centre for Medium-Range Weather Forecasts (ECMWF) \cite{inness2019cams}. This reanalysis is available from 2003 and is provided on a global $0.75^\circ \times 0.75^\circ$ grid at 3-hour time steps. In contrast to the purely spatial case, the disaggregation is carried out jointly in space and time, so we can produce estimates both at finer spatial locations and at intermediate hourly time points that are not available in the original product. As in the previous examples, we include altitude as a covariate to help explain spatial variation in the AOD field.
+
+## Data acquisition and preprocessing {#sec:spatio-temporal-pre}
+
+To download Aerosol Optical Depth (AOD) data from EAC4, we follow the same ADS setup described earlier, but under the "ERA-Interim Product licence". In this example we focus on the first five days of January 2024, which is why we request the AOD variable at 550 nm for the period $\texttt{date = ["2024-01-01/2024-01-05"]}$. We use the dataset identifier $\texttt{"cams-global-reanalysis-eac4"}$, and the argument $\texttt{variable = ["total_aerosol_optical_depth_550nm"]}$ selects total AOD at 550 nm. The argument $\texttt{time}$ specifies the available 3 hour time stamps from $\texttt{"00:00"}$ to $\texttt{"21:00"}$, and $\texttt{data_format = "grib"}$ downloads the data in GRIB format. GRIB (GRIdded Binary) is a compact binary format widely used in meteorology and reanalysis products to store gridded fields efficiently, especially for large spatio temporal datasets.
+
+As mentioned above, the original dataset is provided in GRIB format. To read these files in R, we use `r pkg("terra")`. We first load the GRIB file as a raster object and then reshape it into a long format, which is more convenient for preprocessing and for constructing the spatio-temporal model. Table (\@ref(tab:tab-st-input)) shows the first six rows of the resulting dataset for AOD at the global scale. If you have problems downloading or processing the data, we recommend skipping this step and going directly to the next chunk of code.
+
+```{r tab-st-input, tab.cap="First six rows of the long format dataset obtained from the GRIB AOD file, showing date, hour, longitude, latitude, and AOD (550 nm) values after reshaping and sorting.", include=TRUE, echo=TRUE}
+# Time consuming: This code can  take around 2 minutes to run
+# read GRIB file
+r <- rast("../../../../data/AOD-data.grib")
+
+# create clean layer names from the time dimension
+tt <- time(r)
+
+names(r) <- paste0("t", seq_len(nlyr(r)))
+
+# convert to dataframe in wide format
+df_init <- as.data.frame(r, xy = TRUE, na.rm = FALSE)
+
+# reshape to long format
+df_long <- reshape(
+  df_init,
+  varying = names(r),
+  v.names = "value",
+  timevar = "layer",
+  times = seq_len(nlyr(r)),
+  direction = "long"
+)
+
+# add datetime, date, and hour
+df_long$datetime <- tt[df_long$layer]
+df_long$date <- as.Date(df_long$datetime)
+df_long$hour <- as.integer(format(df_long$datetime, "%H"))
+
+# rename coordinates
+names(df_long)[names(df_long) == "x"] <- "longitude"
+names(df_long)[names(df_long) == "y"] <- "latitude"
+
+# keep only what you want
+df_long <- df_long[, c("date", "hour", "longitude", "latitude", "value")]
+
+# sort values by latitude and longitude
+df_long <- df_long[order(df_long$date, df_long$hour, -df_long$latitude, df_long$longitude), ]
+row.names(df_long) <- NULL
+
+head(df_long)
+```
+
+After converting the dataset to long format, we filter it to the study region of interest, India. Figure (\@ref(fig:fig-aod)) shows the spatial distribution of AOD over India for the first day of January 2024, providing an initial view of the areas with higher aerosol load. Since working with the full global dataset can be computationally demanding, we also provide the filtered long format dataset for India as $\texttt{data-st.csv}$.
+
+
+```{r fig-aod,fig.width=12, fig.height=8, fig.cap="Aerosol Optical Depth (AOD) values over the study region in India on January 1, 2024, at 3-hour intervals from 00:00 to 21:00 UTC. Each panel shows the spatial distribution of AOD on the original grid, with the boundary of India overlaid in black.",fig.align='center', include=TRUE, echo=TRUE}
+
+# Define the squared study region and convert to dataframe
+sq_st <- ext(64.875, 90.375, 5.625, 33.375)
+
+# Coment this if you had problems downloading or prepocesing the dataset
+# ---------------------------------------------------------------------
+# Filtering and saving the dataset
+df_st <- df_long[
+  (df_long$longitude >= sq_st$xmin) &
+  (df_long$longitude <= sq_st$xmax) &
+  (df_long$latitude  >= sq_st$ymin) &
+  (df_long$latitude  <= sq_st$ymax),]
+write.csv(df_st, "../../../../data/data-st.csv", row.names = FALSE)
+# --------------------------------------------------------------------
+
+# Read the filtered dataset
+df_st <- read.csv("../../../../data/data-st.csv")
+
+# Make an index for each different date and hour
+df_st$time <- match(
+  paste(df_st$date, df_st$hour),
+  unique(paste(df_st$date, df_st$hour))
+)
+
+# Download India boundary
+boundary_india <- ne_countries(scale="medium", returnclass="sf") |>
+  subset(admin %in% c("India")) |>
+  st_transform(4326)
+
+# Filter the data to plot AOD concentration on 2024-01-01
+df_plot <- df_st[df_st$time <= 8, ]
+df_plot$hour_lab <- sprintf("%02d:00", df_plot$hour)
+
+# Plot
+ggplot(df_plot, aes(x = longitude, y = latitude, fill = value)) +
+  geom_raster() +
+  geom_sf(data = boundary_india, fill = NA, color = "black",
+          inherit.aes = FALSE) +
+  facet_wrap(~ hour_lab, ncol = 4) +
+  coord_sf(
+    xlim = range(df_plot$longitude),
+    ylim = range(df_plot$latitude),
+    expand = FALSE
+  ) +
+  scale_fill_viridis_c() +
+  labs(
+    title = "AOD on First of January of 2024",
+    x = "Longitude",
+    y = "Latitude",
+    fill = "AOD"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5)
+  )
+
 ```
 
 
