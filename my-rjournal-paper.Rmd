@@ -63,6 +63,23 @@ pkg <- function(x) {
 
 # Introduction
 
+Air pollution is a major public health concern. Recent estimates from the State of Global Air 2025 report suggest that air pollution contributed to 7.9 million deaths worldwide in 2023, highlighting it as one of the leading environmental risk factors for death [@hei2025soga]. In particular, fine particulate matter is one of the clearest examples. Long term exposure to PM2.5 has been consistently associated with increased all cause mortality and with diseases such as respiratory infections, chronic obstructive pulmonary disease, ischemic heart disease, lung cancer, and stroke [@cohen2017; @burnett2018]. In practice, the effects of PM2.5 exposure depend on where people live and move, so identifying local hotspots is important for risk assessment and for targeting interventions [@di2016].
+
+In many settings, PM2.5 is studied together with other key pollutants, especially PM10 and Ozone. Ozone (O3) has been linked to all cause, cardiovascular, and respiratory mortality [@gryparis2004acute; @nuvolone2018effects], and particulate matter including PM2.5 and PM10 has shown adverse effects even under short term exposure, contributing to mortality, morbidity, and adverse birth outcomes [@pascal2014shortterm; @lu2015systematic; @feng2016health]. From a practical perspective, this motivates working at a finer spatial scale, since coarse maps can hide localized areas with elevated concentrations [@di2016]. Since these pollutants are often related (at least pairwise), we model them jointly to account for their multivariate spatial structure and to obtain a more coherent set of maps across pollutants, rather than treating each pollutant independently [@ozoneandpm25;@linearpm25andpm10].
+
+Aerosols, commonly quantified through Aerosol Optical Depth (AOD), are a key component of atmospheric composition with important implications for both climate and human health [@rapetal2013aod]. In particular, AOD at 550 nm is a unitless measure that summarizes how much aerosols in the atmospheric column attenuate light at a reference wavelength in the visible spectrum [@noaa_aod_atbd]. Because AOD provides broad spatial coverage from satellite and reanalysis products, it is often combined with chemical transport models and ground measurements to estimate or forecast surface particulate matter, which makes it useful for air quality monitoring and exposure studies [@vandonkelaar2010; @vandonkelaar2006]. Beyond air quality applications, aerosols also influence the Earth’s radiative balance and cloud processes, so AOD is directly connected to climate related impacts and their downstream effects [@ipcc2013; @tai2014threat].
+
+Despite their importance, many air quality products are only available on coarse spatial or spatio temporal supports, for example CAMS reanalysis products [@copernicus_data; @inness2019cams]. This can hide local variation and make it difficult to identify small areas with high concentrations. Disaggregation models address this problem by assuming an underlying latent process at a finer scale and linking it to aggregated observations through an aggregation operator, while providing uncertainty quantification and allowing the inclusion of high resolution covariates. In this paper, we focus on a practical R workflow based on the models developed in [@RodriguezAvellanedaMult; @avellaneda2025bayesianspatiotemporaldisaggregationmodeling], and we show how to implement spatial, multivariate, and spatio temporal disaggregation with `r pkg("INLA")`.
+
+We start with a univariate spatial example, where we disaggregate PM2.5 concentrations in Portugal from the coarse CAMS grid to a finer resolution, downscaling from 0.1$^\circ$ to 0.02$^\circ$, which corresponds approximately to a change from 10 km to 2 km. We then extend the framework to a multivariate setting using the Linear Model of Coregionalization (LMC), jointly disaggregating PM2.5, PM10, and ozone over Portugal using the same CAMS product [@copernicus_data], targeting the same spatial refinement. Finally, we move to the spatio-temporal setting and disaggregate Aerosol Optical Depth (AOD) at 550 nm over India using the EAC4 reanalysis from ECMWF [@inness2019cams]. In that example, we refine the spatial resolution from $0.75^\circ$ to $0.25^\circ$ and the temporal resolution from 3-hourly to hourly, producing spatio-temporal predictions at intermediate time points that are not available in the original product.
+
+Portugal and India were chosen as case studies because they provide clear and realistic settings for disaggregation while keeping the examples computationally manageable. Portugal has a moderate spatial extent, strong coastal influences, and noticeable topographic variation, which makes it a useful region to illustrate how fine scale covariates can help recover local pollution patterns from coarse grids. India provides a larger and more heterogeneous domain, with diverse topography and regions with high aerosol load, making it a relevant example for spatio-temporal disaggregation.
+
+Unlike traditional Bayesian inference methods such as Markov chain Monte Carlo (MCMC), which can be computationally intensive for high-dimensional spatial and spatio-temporal models, our approach relies on the SPDE representation that links Gaussian processes to Gaussian Markov random fields (GMRFs) on a spatial or spatio temporal mesh. This link is important because GMRFs have sparse precision matrices, which makes inference fast and scalable with the integrated nested Laplace approximation implemented in `r pkg("INLA")`. 
+
+The remainder of the paper is organized as follows. In Section \@ref(sec:methods) we summarize the main disaggregation framework and how it is implemented in R-INLA. We then present three worked examples: Section \@ref(sec:spatial-dis) covers a univariate spatial disaggregation of PM2.5 in Portugal, Section \@ref(sec:mult) extends the approach to a multivariate model for PM2.5, PM10, and ozone in Portugal, and Section \@ref(sec:spatio-temp) presents a spatio-temporal disaggregation example for AOD at 550 nm in India. We close with a short conclusions section, summarizing practical takeaways and possible extensions.
+
+
 # Methodology {#sec:methods}
 
 # Spatial disaggregation of PM2.5 concentration in Portugal {#sec:spatial-dis}
@@ -362,7 +379,7 @@ p1 + p2
 ```
 
 
-# Multivariate Spatial disaggregation of PM2.5, PM10 and Ozone concentrations in Portugal.
+# Multivariate Spatial disaggregation of PM2.5, PM10 and Ozone concentrations in Portugal. {#sec:mult}
 
 In this section, we extend the previous spatial disaggregation framework to a multivariate setting, jointly modeling PM2.5, PM10, and ozone concentrations in Portugal while increasing the spatial resolution from approximately 10 km to 2 km. We use the same CAMS air quality reanalysis data described in Section \@ref(sec:spatial-dis), now incorporating the additional PM10 and ozone fields. The main difference with respect to the univariate case is that the three pollutants are modeled simultaneously, which allows the model to account for their cross dependence and to borrow strength across variables, improving prediction accuracy.
 
@@ -833,7 +850,7 @@ p_obs / p_pred
 
 # Spatio-temporal disaggregation of Aerosol Optical Depth (AOD) in India {#sec:spatio-temp}
 
-In this section, we extend the univariate spatial disaggregation framework to a spatio-temporal setting using Aerosol Optical Depth (AOD) at 550 nm over India. The goal is to increase the spatial resolution from $0.75^\circ$ to $0.25^\circ$, which corresponds approximately to 84 km and 28 km near the equator, and to refine the temporal resolution from 3-hourly to hourly. We use AOD data from the Atmospheric Composition Reanalysis 4 (EAC4) produced by the European Centre for Medium-Range Weather Forecasts (ECMWF) \cite{inness2019cams}. This reanalysis is available from 2003 and is provided on a global $0.75^\circ \times 0.75^\circ$ grid at 3-hour time steps. In contrast to the purely spatial case, the disaggregation is carried out jointly in space and time, so we can produce estimates both at finer spatial locations and at intermediate hourly time points that are not available in the original product. As in the previous examples, we include altitude as a covariate to help explain spatial variation in the AOD field.
+In this section, we extend the univariate spatial disaggregation framework to a spatio-temporal setting using Aerosol Optical Depth (AOD) at 550 nm over India. The goal is to increase the spatial resolution from $0.75^\circ$ to $0.25^\circ$, which corresponds approximately to 84 km and 28 km near the equator, and to refine the temporal resolution from 3-hourly to hourly. We use AOD data from the Atmospheric Composition Reanalysis 4 (EAC4) produced by the European Centre for Medium-Range Weather Forecasts (ECMWF) [@inness2019cams]. This reanalysis is available from 2003 and is provided on a global $0.75^\circ \times 0.75^\circ$ grid at 3-hour time steps. In contrast to the purely spatial case, the disaggregation is carried out jointly in space and time, so we can produce estimates both at finer spatial locations and at intermediate hourly time points that are not available in the original product. As in the previous examples, we include altitude as a covariate to help explain spatial variation in the AOD field.
 
 ## Data acquisition and preprocessing {#sec:spatio-temporal-pre}
 
@@ -1279,3 +1296,6 @@ p2 <- ggplot(dpdf_st[dpdf_st$time <= 9, ], aes(x = x, y = y, fill = pred)) +
   plot_layout(widths = c(1, 3), guides = "collect") &
   theme(legend.position = "right")
 ```
+
+
+# Conclusion and discussion {#sec:con}
