@@ -20,6 +20,7 @@ author:
 output: 
   bookdown::html_document2:
     css: styles.css
+    mathjax: default
   rjtools::rjournal_pdf:
     keep_tex: true
     latex_engine: xelatex
@@ -32,6 +33,13 @@ bibliography: RJreferences.bib
 header-includes:
   - \usepackage{ragged2e}
   - \justifying
+  - |
+    <script>
+      window.MathJax = {
+        loader: {load: ['output/svg']},
+        svg: {fontCache: 'global'}
+      };
+    </script>
 ---
 
 ```{r setup, include=FALSE}
@@ -82,6 +90,189 @@ The remainder of the paper is organized as follows. In Section \@ref(sec:methods
 
 # Methodology {#sec:methods}
 
+In this section, we present the theoretical framework behind our spatial, multivariate, and spatio-temporal disaggregation models. We start with the univariate spatial case, which introduces the main idea of a latent continuous field linked to aggregated observations through an aggregation operator. Building on this setup, we extend the model to the multivariate setting using the Linear Model of Coregionalization (LMC) to jointly represent multiple pollutants. We then return to the univariate formulation and extend it to the spatio-temporal case, where the latent field evolves over space and time. Next, we briefly describe the latent structures used in the spatial and spatio-temporal settings, and we close by outlining how inference is performed with `r pkg("INLA")`.
+
+## Spatial disaggregation model {#sec:uni-mod}
+
+Let $Y_i$ denote the observations in spatial regions $i=1,\ldots,N$. We assume that underlying these observations there is a continuous latent spatial field that is observed only at an aggregated resolution. This latent continuous model can be expressed as a combination of fixed and random effects as
+
+\begin{equation}
+\begin{aligned}
+y(\mathbf{s})
+&= \boldsymbol{\beta}^\top \mathbf{X}(\mathbf{s}) + z(\mathbf{s}) \\
+&=
+\begin{bmatrix}
+\beta_0 & \beta_1 & \cdots & \beta_p
+\end{bmatrix}
+\begin{bmatrix}
+1 \\ x_1(\mathbf{s}) \\ \vdots \\ x_p(\mathbf{s})
+\end{bmatrix}
++ z(\mathbf{s}).
+\end{aligned}
+(\#eq:cont-1)
+\end{equation}
+
+where $\beta,X(\mathbf{s})$ represents the $p$ fixed effects (including the intercept $\beta_0$), and $z(\mathbf{s})$ denotes a spatial Gaussian process. 
+
+From the continuous spatial process $y(\mathbf{s})$, we define an aggregated process over a spatial region $R \subseteq \mathbb{R}^2$ as
+
+\begin{equation}
+z(R) = \frac{1}{|R|}\int_{R} z(\mathbf{s}),\mathrm{d}\mathbf{s},
+(\#eq:cont-2)
+\end{equation}
+
+with $|R| = \int_{R} \mathrm{d}\mathbf{s}$. We then assume that the observed values arise from the aggregation of the continuous latent process together with a measurement error term. In this case, Equation \@ref(eq:cont-1) aggregates to the discrete process
+
+\begin{equation}
+y(R_i) = \beta \, X(R_i) + z(R_i) + v_i,
+(\#eq:areal)
+\end{equation}
+
+where $X(R_i)$ represents the average covariates over the spatial region $R_i$, $z(R_i)$ is the aggregated process defined in Equation \@ref(eq:cont-2), and $v_i$ is an unstructured noise term, modeled as $v_i \sim \mathrm{N}(0, \sigma^2_{\epsilon})$. 
+
+## Multivariate disaggregation model {#sec:mult-mod}
+
+Let $\mathbf{Y}_i = [Y_{i1},\ldots,Y_{iM}]^\top$ denote the multivariate observations available for spatial regions $R_i$, $i=1,\ldots,N$. We assume that these areal observations arise from an underlying continuous $M$-dimensional latent spatial process $\mathbf{y}(\mathbf{s})=[y_1(\mathbf{s}),\ldots,y_M(\mathbf{s})]^\top$ observed in the aggregated locations. Following the idas of the univariate spatial case, we represent this latent process using fixed effects and a multivariate spatial random effect,
+\begin{equation}
+\mathbf{y}(\mathbf{s}) = \mathbf{B}\,\mathbf{X}(\mathbf{s}) + \mathbf{w}(\mathbf{s}),
+(\#eq:mod-con)
+\end{equation}
+where $\mathbf{X}(\mathbf{s})$ collects the covariates (including an intercept) and $\mathbf{B}$ is the corresponding coefficient matrix.
+
+To model the cross-dependence between variables, we use a Linear Model of Coregionalization (LMC) and write the spatial random effect as
+\begin{equation}
+\mathbf{w}(\mathbf{s})=\mathbf{\Lambda}\,\mathbf{z}(\mathbf{s}),
+(\#eq:mult-con-2)
+\end{equation}
+where $\mathbf{z}(\mathbf{s})=[z_1(\mathbf{s}),\ldots,z_M(\mathbf{s})]^\top$ is a vector of independent latent spatial fields and $\mathbf{\Lambda}$ is an $M\times M$ matrix that controls the multivariate spatial structure. Under a common identifiability choice, $\mathbf{\Lambda}$ is taken as lower triangular with ones on the diagonal, so that
+\begin{equation}
+\begin{bmatrix}
+w_1(\mathbf{s})\\
+w_2(\mathbf{s})\\
+\vdots\\
+w_M(\mathbf{s})
+\end{bmatrix}
+=
+\begin{bmatrix}
+1 & 0 & \cdots & 0\\
+\lambda_{21} & 1 & \cdots & 0\\
+\vdots & \vdots & \ddots & \vdots\\
+\lambda_{M1} & \lambda_{M2} & \cdots & 1
+\end{bmatrix}
+\begin{bmatrix}
+z_1(\mathbf{s})\\
+z_2(\mathbf{s})\\
+\vdots\\
+z_M(\mathbf{s})
+\end{bmatrix},
+\end{equation}
+which implies
+\begin{equation}
+\begin{aligned}
+w_1(\mathbf{s}) &= z_1(\mathbf{s}),\\
+w_2(\mathbf{s}) &= \lambda_{21}z_1(\mathbf{s}) + z_2(\mathbf{s}),\\
+&\ \ \vdots\\
+w_M(\mathbf{s}) &= \lambda_{M1}z_1(\mathbf{s}) + \lambda_{M2}z_2(\mathbf{s}) + \cdots + z_M(\mathbf{s}).
+\end{aligned}
+\end{equation}
+
+To link the continuous model with the areal observations, we use the same aggregation idea as in the univariate case. For a region $R_i$, we define the aggregated latent quantities as spatial averages, for example
+\begin{equation}
+\mathbf{z}(R_i)=\frac{1}{|R_i|}\int_{R_i}\mathbf{z}(\mathbf{s})\,\mathrm{d}\mathbf{s},
+\end{equation}
+and we take $\mathbf{X}(R_i)$ as the covariates averaged over the region $R_i$. The multivariate observations $\mathbf{Y}_i$ are then modeled as
+\begin{equation}
+\mathbf{Y}_i = \mathbf{y}(R_i) = \mathbf{B}\,\mathbf{X}(R_i)+\mathbf{\Lambda}\,\mathbf{z}(R_i)+\mathbf{v}_i,
+(\#eq:mod-con-ag)
+\end{equation}
+where $\mathbf{v}_i=[v_{i1},\ldots,v_{iM}]^\top$ is an unstructured error term at the areal level. A common assumption is independent Gaussian noise by component, $v_{ij}\sim \mathrm{N}(0,\sigma^2_{v_j})$, for $j=1,\ldots,M$.
+
+## Spatio-temporal disaggregation model {#sec:st-mod}
+
+Based on the univariate spatial formulation, we now include time and treat the data as aggregated over both space and time. Let $Y_{ij}$ denote the observation for spatial region $R_i$, $i=1,\ldots,N$, and time window $T_j$, $j=1,\ldots,M$. We assume that these observations come from an underlying continuous spatio-temporal latent process $y(\mathbf{s},t)$ that we only observe through aggregation over $(R_i,T_j)$. As in the spatial case, we write the latent process as fixed effects plus a structured random effect,
+\begin{equation}
+y(\mathbf{s},t)=\boldsymbol{\beta}^\top \mathbf{X}(\mathbf{s},t) + z(\mathbf{s},t),
+(\#eq:cont-st-1)
+\end{equation}
+where $\boldsymbol{\beta}^\top \mathbf{X}(\mathbf{s},t)$ represents the fixed effects (including an intercept), and $z(\mathbf{s},t)$ is a zero-mean spatio-temporal Gaussian process.
+
+To connect the continuous model with the aggregated data, we define the spatio-temporal average of the latent field over a region $R\subseteq\mathbb{R}^2$ and a time window $T\subseteq[0,\infty)$ as
+\begin{equation}
+z(R,T)=\frac{1}{|R|\,|T|}\int_T\int_R z(\mathbf{s},t)\,\mathrm{d}\mathbf{s}\,\mathrm{d}t,
+(\#eq:cont-st-2)
+\end{equation}
+with $|R|=\int_R \mathrm{d}\mathbf{s}$ and $|T|=\int_T \mathrm{d}t$. We then assume that the observed values arise from this aggregated latent process plus measurement noise, leading to the discrete model
+\begin{equation}
+Y_{ij}=y(R_i,T_j)=\boldsymbol{\beta}^\top \mathbf{X}(R_i,T_j) + z(R_i,T_j) + v_{ij},
+(\#eq:areal-st)
+\end{equation}
+where $\mathbf{X}(R_i,T_j)$ denotes the covariates averaged over region $R_i$ and time window $T_j$, and $v_{ij}$ is an unstructured error term, modeled as $v_{ij}\sim \mathrm{N}(0,\sigma_{ij}^2)$.
+
+## Spatial structure of the spatial Gaussian process
+
+The spatial random effect $z(\mathbf{s})$ in the univariate model (Equation \@ref(eq:cont-2)) and the independent components $z_j(\mathbf{s})$ in the multivariate model (Equation \@ref(eq:mult-con-2)), for $j=1,\ldots,M$, are modeled as zero-mean Gaussian processes with Matérn spatial dependence [@matern_1960]. Without loss of generality, we describe the structure for a generic field $\hat{z}(\mathbf{s})$. For two locations $\mathbf{s}_i$ and $\mathbf{s}_k$, we assume the Matérn covariance
+
+\begin{equation}
+\text{Cov}(\hat{z}(\mathbf{s}_i), \hat{z}(\mathbf{s}_k)) =
+\frac{\sigma^{2}}{2^{\nu-1}\Gamma(\nu)}
+\left(\kappa\left\|\mathbf{s}_i-\mathbf{s}_k\right\|\right)^{\nu}
+K_{\nu}\left(\kappa\left\|\mathbf{s}_i-\mathbf{s}_k\right\|\right),
+\end{equation}
+
+where $\sigma^{2}$ is the marginal variance, $K_{\nu}(\cdot)$ is the modified Bessel function of the second kind, and $\nu>0$ controls the smoothness of the field. In practice, $\nu$ is often fixed for stability. The parameter $\kappa>0$ controls the spatial range, and a common practical definition is $\rho = \sqrt{8\nu}/\kappa$. This Matérn specification is also convenient for computation, since it has a direct SPDE representation that can be implemented efficiently on a triangulated mesh within the INLA framework.
+
+## Spatio temporal structure of the spatio temporal Gaussian process
+
+In the spatio-temporal disaggregation model, the spatio-temporal Gaussian process $z(\mathbf{s},t)$ (Equation \@ref(eq:cont-st-1)) is specified through the solution of a diffusion-based spatio-temporal SPDE, which directly determines its covariance structure [@lindgren2023inlaspacetime]. The construction starts from the spatial operator $L_s=\gamma_s^2-\Delta$, where $\gamma_s>0$ and $\Delta$ is the Laplacian, defined on a domain $\Omega\subseteq\mathbb{R}^d$ with suitable boundary conditions. This operator leads to a Whittle Matérn type precision operator $Q(\gamma_s,\gamma_e,\alpha)=\gamma_e^2 L_s^{\alpha}$. The corresponding spatial field can be written through the SPDE
+\begin{equation}
+\gamma_e L_s^{\alpha/2}\,\varphi(\mathbf{s}) = \mathcal{W}(\mathbf{s}), \quad \mathbf{s}\in\Omega,
+\end{equation}
+where $\mathcal{W}(\mathbf{s})$ denotes spatial white noise. Following the same idea, we define a spatio-temporal noise term $\mathrm{d}\mathcal{E}_Q(\mathbf{s},t)$ that is temporally uncorrelated but spatially correlated, with precision operator $Q(\gamma_s,\gamma_e,\alpha_e)$.
+
+Using this noise formulation, we define a spatio-temporal diffusion model with smoothness parameters $(\alpha_t,\alpha_s,\alpha_e)$ and scale parameters $(\gamma_t,\gamma_s,\gamma_e)$:
+\begin{equation}
+\left(\gamma_t \frac{d}{dt} + L_s^{\alpha_s} \right)^{\alpha_t} v(\mathbf{s}, t) = \mathrm{d} \mathcal{E}_Q(\mathbf{s}, t), \quad (\mathbf{s}, t) \in \Omega \times \mathbb{R}.
+(\#eq:diffusion)
+\end{equation}
+The solution $v(\mathbf{s},t)$ defines a Gaussian process. In this parameterization, $\alpha_e$ controls the degree of separability, and $\alpha_e=0$ yields a fully nonseparable model. A convenient summary of this behavior is the nonseparability index
+\begin{equation}
+\beta_s = 1 - \frac{\alpha_e}{\alpha} = 1 - \frac{\alpha_e}{\nu_s + d/2},
+\end{equation}
+where $\nu_s$ denotes the smoothness of the spatial process and $\beta_s\in[0,1]$, with $\beta_s=0$ corresponding to a separable model and $\beta_s=1$ to a fully nonseparable model [@lindgren2023inlaspacetime]. In this paper, we use the nonseparable first-order diffusion model with $(\alpha_t,\alpha_s,\alpha_e)=(1,2,1)$, which corresponds to the $\texttt{model = "121"}$ specification in `r pkg("INLAspacetime")`.
+
+For the univariate spatial model in Section \@ref(sec:uni-mod) and the multivariate spatial model in Section \@ref(sec:mult-mod), inference is performed using the SPDE approach implemented in `r pkg("INLA")`. The main idea is that each latent spatial Gaussian process, either $z(\mathbf{s})$ in the univariate case or $z_j(\mathbf{s})$ for $j=1,\ldots,M$ in the multivariate case, can be represented as the solution of a Mat\'ern SPDE [@whittle1963stochastic]. Since the same construction applies to each latent field, without loss of generality we describe it for a generic field $\hat{z}(\mathbf{s})$.
+
+A Mat\'ern Gaussian random field can be characterized through the SPDE
+\begin{equation}
+\left(\kappa^2-\Delta\right)^{\alpha / 2}\big(\tau\,\hat{z}(\mathbf{s})\big)=\vartheta(\mathbf{s}),
+(\#eq:spde)
+\end{equation}
+where $\vartheta(\mathbf{s})$ is spatial white noise, $\alpha$ controls smoothness (with $\nu=\alpha-d/2$ in dimension $d$), and $(\kappa,\tau)$ control the range and marginal variance of the field. The SPDE representation is convenient because `r pkg("INLA")` approximates $\hat{z}(\mathbf{s})$ on a triangulated mesh, leading to a Gaussian Markov random field with a sparse precision matrix and fast inference [@rue_et_al_r_inla_2009].
+
+Let $\{\mathbf{s}^*_k\}_{k=1}^G$ be the mesh vertices and $\{\psi_k(\mathbf{s})\}$ the associated piecewise linear basis functions. The latent field is approximated by
+\begin{equation}
+\hat{z}(\mathbf{s}) \approx \sum_{k=1}^{G}\psi_k(\mathbf{s})\,\hat{z}_k,
+(\#eq:basis)
+\end{equation}
+where $\hat{z}_k$ are Gaussian weights defined on the mesh nodes. In disaggregation models we do not observe $\hat{z}(\mathbf{s})$ directly. Instead, the data are available as spatial averages over regions $R_i$. Following [@moraga2017geostatistical], the key step is to link the areal quantity $\hat{z}(R_i)=\frac{1}{|R_i|}\int_{R_i}\hat{z}(\mathbf{s})\,\mathrm{d}\mathbf{s}$ to the mesh representation. Substituting Equation \@ref(eq:basis) into this average gives the core approximation
+\begin{align}
+\begin{split}
+\hat{z}(R_i)
+&= \frac{1}{|R_i|}\int_{R_i} \hat{z}(\mathbf{s})\,\mathrm{d}\mathbf{s}
+ = \frac{1}{|R_i|}\int_{R_i} \sum_{k=1}^{G} \psi_k(\mathbf{s})\,\hat{z}_k \,\mathrm{d}\mathbf{s} \\
+&= \frac{1}{|R_i|}\sum_{k=1}^{G}\left(\int_{R_i} \psi_k(\mathbf{s})\,\mathrm{d}\mathbf{s}\right)\hat{z}_k \\
+&\approx \frac{1}{|R_i|}\sum_{k=1}^{G}\left(\int_{R_i} \psi_k(\mathbf{s}^*_k)\,1_{\{\psi_k(\mathbf{s})\neq 0\}}\,\mathrm{d}\mathbf{s}\right)\hat{z}_k \\
+&= \sum_{k=1}^{G}\frac{|R_{ik}|}{|R_i|}\,\hat{z}_k
+ = \sum_{k=1}^{G} A_{ik}\,\hat{z}_k,
+\qquad \text{with}\qquad
+A_{ik}=\frac{|R_{ik}|}{|R_i|}.
+\end{split}
+(\#eq:des)
+\end{align}
+The matrix $\mathbf{A}=(A_{ik})$ is the projection (aggregation) matrix that maps the latent field from the mesh nodes to the areal supports. By construction, $A_{ik}\ge 0$ and each row sums to one, $\sum_k A_{ik}=1$. In practice, when the mesh is close to regular, we often use the simplified choice $A_{ik}=1/n_i$ for the $n_i$ mesh nodes that fall inside region $R_i$.
+
+This construction is the same for the univariate and multivariate spatial models. In the univariate case, $\mathbf{A}$ links the latent field to the areal observations in Equation \@ref(eq:areal). In the multivariate case, the same projection idea is applied to each independent component $z_j(\mathbf{s})$, $j=1,\ldots,M$, and the LMC structure is then obtained by combining these projected components according to Equation \@ref(eq:mult-con-2). In `r pkg("INLA")`, these mappings are implemented by defining the SPDE model on the mesh and supplying the projection matrices in the `inla.stack()` objects for estimation and prediction.
+
 # Spatial disaggregation of PM2.5 concentration in Portugal {#sec:spatial-dis}
 
 In this section, we illustrate spatial disaggregation by improving the resolution of PM2.5 concentrations in Portugal from 10km to 2km. We used annual air quality reanalysis data for Portugal provided by the Copernicus Atmosphere Monitoring Service (CAMS) [@copernicus_data], a high-resolution product developed by the European Centre for Medium-Range Weather Forecasts (ECMWF). This publicly accessible dataset, available at https://ads.atmosphere.copernicus.eu/datasets/cams-europe-air-quality-reanalyses, integrates satellite observations and auxiliary information to get estimations of air pollution levels in a very corase resolution.
@@ -108,9 +299,9 @@ df <- df[order(df$y,df$x), ]
 names(df) <- c("longitude","latitude","pm2p5")
 write.csv(df, "data/pm2p5_portugal.csv", row.names = FALSE)
 
-# Read dataset from preprocess file 
+# Read dataset from preprocess file
 df <- read.csv("data/pm2p5_portugal.csv")
- 
+
 # Get portugal and Spain borders
 boundary <- ne_countries(scale="medium", returnclass="sf") |>
   subset(admin %in% c("Portugal","Spain")) |>
@@ -136,18 +327,18 @@ Figure (\@ref(fig:pm25-plot)) shows the spatial distribution of mean PM2.5 over 
 The first step in the disaggregation workflow is to construct an input grid that matches the support of the observed data. Using the dataframe $\texttt{df}$, we build a squared grid as an $\texttt{sf}$ object with the same spatial extent and dimensions as the original dataset. The second step is to build a spatial mesh that is finer than the initial resolution of the data, as shown on the right side of Figure (\@ref(fig:mesh-plot)). This panel displays a portion of the triangulated mesh, represented by black segments, together with the original gridded support, shown in red. Finally, to achieve the target disaggregation from 0.1$^\circ$ to 0.02$^\circ$, we define the prediction points on the desired high resolution grid. The variable $\texttt{spf}$ controls the disaggregation factor. Specifically, setting $\texttt{spf}=5$ increases the resolution within each original cell by a factor of $5 \times 5 = 25$, as illustrated on the left side of Figure (\@ref(fig:mesh-plot)), where red lines denote the original grid and blue dots indicate the prediction locations under the disaggregated scenario.
 
 ```{r mesh-plot, fig.cap="Spatial discretization for disaggregation. Original grid support is shown in red. Prediction points for $\texttt{spf}=5$ are shown in blue (left), and a portion of the triangulated mesh is shown in black (right)" ,fig.align='center',include=TRUE, echo=TRUE}
-# Initial squared grid 
+# Initial squared grid
 map <- st_as_sf(st_make_grid(sq, n = c(length(unique(df$longitude)),
                                length(unique(df$latitude)))))
 st_geometry(map) <- "geometry"
 st_crs(map) <- "EPSG:4326"
 
-# Spatial mesh 
+# Spatial mesh
 
 sq_sf <- st_as_sf(as.polygons(sq))
 
 hexpts <- fm_hexagon_lattice(
-  bnd = st_buffer(sq_sf, 0.1), 
+  bnd = st_buffer(sq_sf, 0.1),
   edge_len = 0.05
 )
 
@@ -160,7 +351,7 @@ mesh <- fm_mesh_2d(
 # prediction points
 
 spf <- 5 # spatial factor
-def <- abs(unique(df$latitude)[2]-unique(df$latitude)[1])/2 
+def <- abs(unique(df$latitude)[2]-unique(df$latitude)[1])/2
 
 x <- seq(min(df$longitude) - def*((spf-1)/spf),
          max(df$longitude) + def*((spf-1)/spf),
@@ -219,7 +410,7 @@ map_pred$elev <- terra::extract(r_crop,map_pred,mean)$eurodem
 # Plot elevation in the input grid
 p1 <- ggplot(map) +
   geom_sf(aes(fill = elev), color = NA) +
-  scale_fill_viridis_c(name = "Elevation (m)") + 
+  scale_fill_viridis_c(name = "Elevation (m)") +
   geom_sf(data = boundary, fill = NA, color = "black") +
   coord_sf(xlim = c(-10, -6), ylim = c(36.5,42.5),
            expand = FALSE) +
@@ -231,7 +422,7 @@ p1 <- ggplot(map) +
 # Plot elevation in the prediction grid
 p2 <- ggplot(map_pred) +
   geom_sf(aes(fill = elev), color = NA) +
-  scale_fill_viridis_c(name = "Elevation (m)") + 
+  scale_fill_viridis_c(name = "Elevation (m)") +
   geom_sf(data = boundary, fill = NA, color = "black") +
   coord_sf(xlim = c(-10, -6), ylim = c(36.5,42.5),
            expand = FALSE) +
@@ -257,7 +448,7 @@ where $\beta_0$ is an intercept and $\beta_1$ is the regression coefficient asso
 
 ## Model inputs for INLA {#sec:mod-inp}
 
-To fit the model described in Equation \@ref(eq:app-pm25), we use the triangulated mesh defined before in Section \@ref(sec:mesh). We then construct the SPDE representation on this mesh, and build the corresponding projection matrices that link the observation locations and the prediction points to the mesh nodes. Finally, we combine the response, covariates, and latent components into \texttt{INLA} stacks, which are used to perform model estimation and prediction. 
+To fit the model described in Equation \@ref(eq:app-pm25), we use the triangulated mesh defined before in Section \@ref(sec:mesh). We then construct the SPDE representation on this mesh, and build the corresponding projection matrices that link the observation locations and the prediction points to the mesh nodes. Finally, we combine the response, covariates, and latent components into \texttt{INLA} stacks, which are used to perform model estimation and prediction.
 
 ```{r input-inla, include=TRUE, echo=TRUE}
 # Construct the SPDE in the spatial mesh
@@ -289,7 +480,7 @@ stk.est <- inla.stack(
   effects = list(
     s = 1:nv,
     b0 = rep(1, nv),
-    elev = map$elev/1000 # convert m to km 
+    elev = map$elev/1000 # convert m to km
   ),
   tag = "y")
 
@@ -300,7 +491,7 @@ stk.pred <- inla.stack(
   effects = list(
     s = 1:nv,
     b0 = rep(1, nv),
-    elev = map_pred$elev/1000 # convert m to km 
+    elev = map_pred$elev/1000 # convert m to km
     ),
   tag = "y.pred")
 
@@ -316,9 +507,9 @@ Now, we translate Equation \@ref(eq:app-pm25) into an $\texttt{INLA}$ formula, w
 # Time consuming: This preprocessing takes roughly 5 minutes to be executed
 
 # INLA formula
-form <- y ~ 0 + b0 + elev + f(s, model = spde) 
+form <- y ~ 0 + b0 + elev + f(s, model = spde)
 
-# Fitting and prediction 
+# Fitting and prediction
 res <- inla(
   formula=form,
   #verbose = TRUE,
@@ -334,7 +525,7 @@ res$summary.fixed |>
   kable_styling(full_width = FALSE)
 ```
 
-Table (\@ref(tab:fixed-table)) summarizes the posterior distributions of the fixed effects. The posterior mean of the intercept $\beta_0$ is 8.29~$\mu$g/m$^3$, which represents the mean PM2.5 level over Portugal when elevation is zero. The posterior credible interval for the elevation coefficient excludes zero, indicating a clear association between elevation and PM2.5. The posterior mean is $-0.24$, implying that an increase of 1~km in altitude is associated with a decrease of about 0.24~$\mu$g/m$^3$ in PM2.5. 
+Table (\@ref(tab:fixed-table)) summarizes the posterior distributions of the fixed effects. The posterior mean of the intercept $\beta_0$ is 8.29~$\mu$g/m$^3$, which represents the mean PM2.5 level over Portugal when elevation is zero. The posterior credible interval for the elevation coefficient excludes zero, indicating a clear association between elevation and PM2.5. The posterior mean is $-0.24$, implying that an increase of 1~km in altitude is associated with a decrease of about 0.24~$\mu$g/m$^3$ in PM2.5.
 
 ## Input data and predicted values
 
@@ -353,7 +544,7 @@ map_pred$pm2p5 <- res$summary.linear.predictor[idx, "mean"]
 # Plot for input grid
 p1 <- ggplot(map) +
   geom_sf(aes(fill = pm2p5), color = NA) +
-  scale_fill_viridis_c(name = "Pm2.5") + 
+  scale_fill_viridis_c(name = "Pm2.5") +
   geom_sf(data = boundary, fill = NA, color = "black") +
   coord_sf(xlim = c(-10, -6), ylim = c(36.5,42.5),
            expand = FALSE) +
@@ -365,7 +556,7 @@ p1 <- ggplot(map) +
 # Plot for predictions
 p2 <- ggplot(map_pred) +
   geom_sf(aes(fill = pm2p5), color = NA) +
-  scale_fill_viridis_c(name = "Pm2.5") + 
+  scale_fill_viridis_c(name = "Pm2.5") +
   geom_sf(data = boundary, fill = NA, color = "black") +
   coord_sf(xlim = c(-10, -6), ylim = c(36.5,42.5),
            expand = FALSE) +
@@ -432,14 +623,14 @@ write.csv(dfm, "data/mult-data.csv", row.names = FALSE)
 Figure (\@ref(fig:mult-plot)) displays the spatial distribution of mean PM2.5, PM10, and ozone over Portugal for January 2019 on the original CAMS grid (about 0.1$^\circ$, roughly 10 km), which is relatively coarse for local-scale interpretation. The maps suggest a positive spatial association between PM2.5 and PM10, with areas of higher PM2.5 generally aligning with higher PM10. In contrast, ozone shows an opposite spatial pattern, indicating a negative spatial association with PM2.5 and PM10, where higher particulate concentrations tend to coincide with lower ozone levels.
 
 ```{r mult-plot,fig.width=12, fig.height=5, fig.align='center' , fig.cap="Mean PM2.5, PM10 and Ozone concentration in Portugal during January 2019. Country boundaries for Portugal and Spain are overlaid for geographic reference." ,include=TRUE, echo=TRUE}
-# Read dataset from preprocess file 
+# Read dataset from preprocess file
 dfm <- read.csv("data/mult-data.csv")
 
 # Save it as rast files for plotting
 r_sq_pm2p5 <- rast(dfm[,c("longitude","latitude","pm2p5")])
 r_sq_pm10 <- rast(dfm[,c("longitude","latitude","pm10")])
 r_sq_o3 <- rast(dfm[,c("longitude","latitude","ozone")])
- 
+
 # Get portugal and Spain borders
 boundary <- ne_countries(scale="medium", returnclass="sf") |>
   subset(admin %in% c("Portugal","Spain")) |>
@@ -488,24 +679,24 @@ p1+p2+p3
 In this section, we replicate the procedure described in \@ref(sec:mesh) for the multivariate dataset $\texttt{dfm}$. Since the steps depend only on the spatial dimensions of the data, we can reuse the same code to construct the input grid, the spatial mesh, and the prediction locations, as in \@ref(sec:mesh). The result spatial mesh, input grid and prediction data result of this step have to looks like in the Figure (\@ref(fig:mesh-plot)).
 
 ```{r mesh-mult,include=TRUE, echo=TRUE}
-# Initial squared grid 
+# Initial squared grid
 map <- st_as_sf(st_make_grid(sq, n = c(length(unique(dfm$longitude)),
                                length(unique(dfm$latitude)))))
 st_geometry(map) <- "geometry"
 st_crs(map) <- "EPSG:4326"
 
-# Spatial mesh 
+# Spatial mesh
 
 # convert the square in a sf object
 sq_sf <- st_as_sf(as.polygons(sq))
 
 # Create equally space points for the emsh
 hexpts <- fm_hexagon_lattice(
-  bnd = st_buffer(sq_sf, 0.1), 
+  bnd = st_buffer(sq_sf, 0.1),
   edge_len = 0.05
 )
 
-# Create the mesh based in the previous points 
+# Create the mesh based in the previous points
 mesh <- fm_mesh_2d(
   loc = hexpts,
   max.edge = 0.1,
@@ -518,7 +709,7 @@ mesh_sf <- st_as_sf(data.frame(x=mesh$loc[,1],y=mesh$loc[,2],id=1:mesh$n),
 
 # prediction points
 spf <- 5 # spatial factor
-def <- abs(unique(dfm$latitude)[2]-unique(dfm$latitude)[1])/2 
+def <- abs(unique(dfm$latitude)[2]-unique(dfm$latitude)[1])/2
 
 x <- seq(min(dfm$longitude) - def*((spf-1)/spf),
          max(dfm$longitude) + def*((spf-1)/spf),
@@ -559,9 +750,9 @@ map_pred$elev <- terra::extract(r_crop,map_pred,mean)$eurodem
 
 ## Model
 
-The multivariate disaggregation model, uses the relation between response variable and the information of fine resolution covariates. This model, as the univariate case, assumes the existence of three independent latent continuous spatial process to express the response variable as a linear combination of this processes using the Linear Model of Corregionalization (LMC). Then for a $M$-multivariate response variable $\mathbf{W}(\mathbf{s}) = [W_1(\mathbf{s}), \dots, W_M(\mathbf{s})]^\top$, we can express this using the LCM as $\mathbf{W}(\textbf{s}) = \mathbf{\Lambda}\mathbf{{U}}(\textbf{s})$ where $\{\mathbf{U}(\textbf{s})\}$ represents $M$ independent latent spatial processes and $\Lambda$ is a $M$ dimensional squared matrix that defined the multivariate correlation structure between response variables. 
+The multivariate disaggregation model, uses the relation between response variable and the information of fine resolution covariates. This model, as the univariate case, assumes the existence of three independent latent continuous spatial process to express the response variable as a linear combination of this processes using the Linear Model of Corregionalization (LMC). Then for a $M$-multivariate response variable $\mathbf{W}(\mathbf{s}) = [W_1(\mathbf{s}), \dots, W_M(\mathbf{s})]^\top$, we can express this using the LCM as $\mathbf{W}(\textbf{s}) = \mathbf{\Lambda}\mathbf{{U}}(\textbf{s})$ where $\{\mathbf{U}(\textbf{s})\}$ represents $M$ independent latent spatial processes and $\Lambda$ is a $M$ dimensional squared matrix that defined the multivariate correlation structure between response variables.
 
-For identifiability of the independent processes $\mathbf{U}(\mathbf{s})$, constraints must be imposed on the coregionalization matrix $\mathbf{\Lambda}$ to avoid rotational aliasing, requiring $M \times (M-1)$ restrictions. A common choice is to set $\mathbf{\Lambda}$ as a lower triangular matrix with ones on the diagonal [@geweke1996measuring]. Under these conditions the response variable $\mathbf{W}(\mathbf{s})$ could be expresed as 
+For identifiability of the independent processes $\mathbf{U}(\mathbf{s})$, constraints must be imposed on the coregionalization matrix $\mathbf{\Lambda}$ to avoid rotational aliasing, requiring $M \times (M-1)$ restrictions. A common choice is to set $\mathbf{\Lambda}$ as a lower triangular matrix with ones on the diagonal [@geweke1996measuring]. Under these conditions the response variable $\mathbf{W}(\mathbf{s})$ could be expresed as
 
 \begin{equation*}
     \begin{bmatrix}
@@ -642,7 +833,7 @@ A.m <- as(A.m, "dgCMatrix")
 # Projection matrix for prediction locations
 A.pr <- inla.spde.make.A(mesh = mesh, loc = dp)
 
-# First response matrix for PM2.5 
+# First response matrix for PM2.5
 y1 <- matrix(NA, nrow = n.ar, ncol = n.pp)
 y1[, 1] <- dfm$pm2p5
 
@@ -667,7 +858,7 @@ stk.y1 <- inla.stack(
   effects = list(
     intercept.y1 = rep(1, nv),
     spatial.field.sh = 1:nv,
-    elev.1 = map$elev/1000 # convert m to km 
+    elev.1 = map$elev/1000 # convert m to km
   ),
   tag = "y1")
 
@@ -679,7 +870,7 @@ stk.y2 <- inla.stack(
     intercept.y2 = rep(1, nv),
     sh.copy.y2 = 1:nv,
     spatial.field.y2 = 1:nv,
-    elev.2 = map$elev/1000 # convert m to km 
+    elev.2 = map$elev/1000 # convert m to km
   ),
   tag = "y2")
 
@@ -692,7 +883,7 @@ stk.y3 <- inla.stack(
     sh.copy.y3 = 1:nv,
     y2.copy.y3 = 1:nv,
     spatial.field.y3 = 1:nv,
-    elev.3 = map$elev/1000 # convert m to km 
+    elev.3 = map$elev/1000 # convert m to km
   ),
   tag = "y3")
 
@@ -709,7 +900,7 @@ stk.y1.pred <- inla.stack(tag = "y1.pred",
                          effects = list(
                            intercept.y1 = rep(1, nv),
                            spatial.field.sh = 1:nv,
-                           elev.1 = map_pred$elev/1000 # convert m to km 
+                           elev.1 = map_pred$elev/1000 # convert m to km
                          ))
 
 # Stack for predicting PM10
@@ -720,7 +911,7 @@ stk.y2.pred <- inla.stack(tag = "y2.pred",
                            intercept.y2 = rep(1, nv),
                            sh.copy.y2 = 1:nv,
                            spatial.field.y2 = 1:nv,
-                           elev.2 = map_pred$elev/1000 # convert m to km 
+                           elev.2 = map_pred$elev/1000 # convert m to km
                          ))
 
 # Stack for predicting Ozone
@@ -732,7 +923,7 @@ stk.y3.pred <- inla.stack(tag = "y3.pred",
                            sh.copy.y3 = 1:nv,
                            y2.copy.y3 = 1:nv,
                            spatial.field.y3 = 1:nv,
-                           elev.3 = map_pred$elev/1000 # convert m to km 
+                           elev.3 = map_pred$elev/1000 # convert m to km
                          ))
 
 # stack for prediction
@@ -788,7 +979,7 @@ After fitting the model, Figure (\@ref(fig:pred-plot-mult)) shows the three poll
 
 ```{r pred-plot-mult,fig.width=12, fig.height=10, fig.cap="Observed and disaggregated pollutant fields over Portugal. The top row shows the observed mean PM2.5, PM10, and ozone on the coarse CAMS grid, and the bottom row shows the corresponding posterior mean predictions from the multivariate disaggregation model on the finer grid. Country boundaries are overlaid for reference." ,fig.align='center', include=TRUE, echo=TRUE}
 
-# get indexes of each response variable 
+# get indexes of each response variable
 idx.y1 <- inla.stack.index(stk.full.m, 'y1.pred')$data
 idx.y2 <- inla.stack.index(stk.full.m, 'y2.pred')$data
 idx.y3 <- inla.stack.index(stk.full.m, 'y3.pred')$data
@@ -902,9 +1093,9 @@ head(df_long) |>
   kableExtra::kable_styling(full_width = FALSE)
 ```
 
-After converting the dataset to long format, we filter it to the study region of interest, India. Figure (@ref(fig:fig-aod)) shows the spatial distribution of AOD over India for the first day of January 2024, giving a first look at the main spatial patterns and areas with higher aerosol load. The object $\texttt{sq_st}$ defines the spatial domain used in this study. In spatio-temporal modeling, keeping a very large region increases the number of spatial locations and, as a result, the model becomes more computationally demanding and takes longer to fit. For this reason, we also provide, as commented code, a smaller domain that can be used to reduce computational cost. A comparison of fitting and prediction times for the larger and smaller domains is discussed in Section (@ref(sec:st-fit)). Finally, to avoid working with the full global dataset, we provide the filtered long format dataset for India as $\texttt{data-st.csv}$.
+After converting the dataset to long format, we filter it to the study region of interest, India. Figure (\@ref(fig:aod-plot)) shows the spatial distribution of AOD over India for the first day of January 2024, giving a first look at the main spatial patterns and areas with higher aerosol load. The object $\texttt{sq_st}$ defines the spatial domain used in this study. In spatio-temporal modeling, keeping a very large region increases the number of spatial locations and, as a result, the model becomes more computationally demanding and takes longer to fit. For this reason, we also provide, as commented code, a smaller domain that can be used to reduce computational cost. A comparison of fitting and prediction times for the larger and smaller domains is discussed in Section (\@ref(sec:st-fit)). Finally, to avoid working with the full global dataset, we provide the filtered long format dataset for India as $\texttt{data-st.csv}$.
 
-```{r fig-aod,fig.width=10, fig.height=6, fig.cap="Aerosol Optical Depth (AOD) values over the study region in India on January 1, 2024, at 3-hour intervals from 00:00 to 21:00 UTC. Each panel shows the spatial distribution of AOD on the original grid, with the boundary of India overlaid in black.",fig.align='center', include=TRUE, echo=TRUE}
+```{r aod-plot,fig.width=10, fig.height=6, fig.cap="Aerosol Optical Depth (AOD) values over the study region in India on January 1, 2024, at 3-hour intervals from 00:00 to 21:00 UTC. Each panel shows the spatial distribution of AOD on the original grid, with the boundary of India overlaid in black.",fig.align='center', include=TRUE, echo=TRUE}
 
 # Define the squared study region and convert to dataframe
 sq_st <- ext(64.875, 90.375, 5.625, 33.375) # big
@@ -965,8 +1156,8 @@ ggplot(df_st, aes(x = longitude, y = latitude, fill = value)) +
 
 In this section, we specify the spatio temporal mesh and other elements used for disaggregation. We reuse the spatial triangulated mesh from the univariate case in Section (\@ref(sec:mesh)) and introduce a one dimensional temporal mesh over the study period. We also define the input spatial grid and the spatio temporal prediction locations used to obtain estimates at the finer resolution. Figure (\@ref(fig:mesh-st-plot)) summarizes these elements. The first panel shows a portion of the triangulated spatial mesh, represented by black segments, together with the coarse input grid, shown in red. The second panel shows the spatial prediction locations, shown as blue points, defined within each coarse grid cell. The third panel shows the temporal mesh as a sequence of knots along the time axis, red dots are the observations and black dots are the mesh points. To achieve the spatial disaggregation from $0.75^\circ$ to $0.25^\circ$, we define prediction locations within each coarse cell using the spatial factor $\texttt{spf_st}=3$, which increases the number of locations per cell by a factor of $3 \times 3 = 9$. To refine the temporal resolution from 3 hourly to hourly, we use the temporal factor $\texttt{tf}=3$, which introduces intermediate time points between the original observations.
 
-```{r fig-mesh-st,fig.width=10, fig.height=4,fig.cap="Spatio temporal discretization for AOD disaggregation. Left, triangulated spatial mesh (black) overlaid with the coarse input grid (red). Middle, spatial prediction locations (blue) defined within each coarse cell for $\texttt{spf_st}=3$. Right, one dimensional temporal mesh, red dots observation points, black dots mesh points.",fig.align='center', include=TRUE, echo=TRUE}
-# Initial squared grid 
+```{r mesh-st-plot,fig.width=10, fig.height=4,fig.cap="Spatio temporal discretization for AOD disaggregation. Left, triangulated spatial mesh (black) overlaid with the coarse input grid (red). Middle, spatial prediction locations (blue) defined within each coarse cell for $\texttt{spf_st}=3$. Right, one dimensional temporal mesh, red dots observation points, black dots mesh points.",fig.align='center', include=TRUE, echo=TRUE}
+# Initial squared grid
 map_st <- st_as_sf(st_make_grid(sq_st, n = c(length(unique(df_st$longitude)),
                                length(unique(df_st$latitude)))))
 st_geometry(map_st) <- "geometry"
@@ -991,7 +1182,7 @@ smesh <- fm_mesh_2d(
 )
 
 # Create the temporal mesh
-tf <- 3 # temporal factor 
+tf <- 3 # temporal factor
 nt <- tf * max(df_st$time)
 tmesh <- inla.mesh.1d(
   loc = seq(from=1,to=nt,by =1))
@@ -1075,7 +1266,7 @@ map_pred_st$elev <- terra::extract(r_st,map_pred_st,mean)$elev
 
 p1 <- ggplot(map_st) +
   geom_sf(aes(fill = elev), color = NA) +
-  scale_fill_viridis_c(name = "Elevation (m)") + 
+  scale_fill_viridis_c(name = "Elevation (m)") +
   geom_sf(data = boundary_india, fill = NA, color = "black") +
   coord_sf(xlim = c(sq_st$xmin,sq_st$xmax),
            ylim = c(sq_st$ymin,sq_st$ymax),expand = FALSE) +
@@ -1087,7 +1278,7 @@ p1 <- ggplot(map_st) +
 # Plot elevation in the prediction grid
 p2 <- ggplot(map_pred_st) +
   geom_sf(aes(fill = elev), color = NA) +
-  scale_fill_viridis_c(name = "Elevation (m)") + 
+  scale_fill_viridis_c(name = "Elevation (m)") +
   geom_sf(data = boundary_india, fill = NA, color = "black") +
   coord_sf(xlim = c(sq_st$xmin,sq_st$xmax),
            ylim = c(sq_st$ymin,sq_st$ymax),expand = FALSE) +
@@ -1171,9 +1362,9 @@ elev_pred_st <- rep(map_pred_st$elev/1000,nt) #/1000 to convert km to m
 # Stack for estimation AOD
 stk.est.st <- inla.stack(
   data = list(y = df_st$value),
-  A = list(A.st,1), 
+  A = list(A.st,1),
   effects = list(list(
-    intercept = rep(1,(nt*nvs)), 
+    intercept = rep(1,(nt*nvs)),
     st = 1:(nt*nvs)),
     elev = elev_map_st
     ),
@@ -1195,7 +1386,7 @@ stk.full.st <- inla.stack(stk.est.st, stk.pred.st)
 
 ## Fitting the spatio-temporal disaggregation model with INLA {#sec:st-fit}
 
-To fit the spatio temporal disaggregation model in Equation @ref(eq:app-aod), we define the $\texttt{INLA}$ formula $\texttt{form_st}$. This is similar to the spatial case, but the latent field is now indexed in space and time. The term $\texttt{0 + intercept}$ adds an explicit intercept, $\texttt{elev}$ includes elevation as a covariate, and $\texttt{f(st, model = stmodel)}$ defines the spatio-temporal latent field through $\texttt{stmodel}$. We fit the model with $\texttt{inla()}$ using the full stack $\texttt{stk.full.st}$, and $\texttt{control.predictor}$ supplies the projection matrix needed to compute fitted values and predictions.
+To fit the spatio temporal disaggregation model in Equation \@ref(eq:app-aod), we define the $\texttt{INLA}$ formula $\texttt{form_st}$. This is similar to the spatial case, but the latent field is now indexed in space and time. The term $\texttt{0 + intercept}$ adds an explicit intercept, $\texttt{elev}$ includes elevation as a covariate, and $\texttt{f(st, model = stmodel)}$ defines the spatio-temporal latent field through $\texttt{stmodel}$. We fit the model with $\texttt{inla()}$ using the full stack $\texttt{stk.full.st}$, and $\texttt{control.predictor}$ supplies the projection matrix needed to compute fitted values and predictions.
 
 Since this model can take a long time to fit, especially for the larger spatial domain, we use a practical strategy based on $\texttt{theta.ini}$. Here $\texttt{theta.ini}$ provides initial values for the latent field hyperparameters and the fixed effects, and we pass them through $\texttt{control.mode}$ and $\texttt{control.fixed}$. In practice, giving reasonable initial values helps the optimizer converge faster and reduces total runtime. In our experiments, fitting the model without $\texttt{theta.ini}$ took about $6$ h $19$ min for the big region and about $2$ h for the small region. Using $\texttt{theta.ini}$ reduced the runtime to about $1$ h $19$ min for the big region and about $27$ min for the small region. We provide two sets of starting values, one for the smaller domain and one for the larger domain, and you can switch between them by selecting the corresponding $\texttt{theta.ini}$ line in the code.
 
@@ -1217,7 +1408,7 @@ theta.ini <- c(11.3,2.06, 7.49,-0.64,0.61,-0.11) # big
 #                control.compute = list(dic = TRUE,config=TRUE,
 #                                       return.marginals.predictor = TRUE),
 #                verbose = TRUE)
-# 
+#
 # saveRDS(res_st, file = "data/models/st-model-big.rds")
 res_st <- readRDS("data/models/st-model-big-a.rds")
 
@@ -1247,7 +1438,7 @@ boundary_india <- ne_countries(scale="medium", returnclass="sf") |>
 
 # Plot
 
-# Common scale 
+# Common scale
 lim_fill <- range(c(df_st$value, dpdf_st$pred), na.rm = TRUE)
 
 p1 <- ggplot(df_st[df_st$time < 4, ], aes(x = longitude, y = latitude, fill = value)) +
