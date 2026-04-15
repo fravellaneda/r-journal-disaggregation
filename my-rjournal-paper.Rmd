@@ -29,7 +29,11 @@ output:
     toc: no
   bookdown::pdf_document2:
     latex_engine: xelatex
-bibliography: RJreferences.bib
+bibliography:
+  - RJreferences.bib
+  - packages.bib
+nocite: |
+  @*
 header-includes:
   - \usepackage{ragged2e}
   - \justifying
@@ -49,7 +53,6 @@ library(tidyterra)
 library(fmesher)
 library(INLA)
 library(INLAspacetime)
-
 library(curl)
 
 pkg <- function(x) {
@@ -60,26 +63,23 @@ pkg <- function(x) {
   }
 }
 
+knitr::write_bib(c(.packages()), "packages.bib")
+
 ```
 
 # Introduction
 
-Air pollution is a major public health concern. Recent estimates from the State of Global Air 2025 report suggest that air pollution contributed to 7.9 million deaths worldwide in 2023, highlighting it as one of the leading environmental risk factors for death [@hei2025soga]. In particular, fine particulate matter is one of the clearest examples. Long term exposure to PM2.5 has been consistently associated with increased all cause mortality and with diseases such as respiratory infections, chronic obstructive pulmonary disease, ischemic heart disease, lung cancer, and stroke [@cohen2017; @burnett2018]. In practice, the effects of PM2.5 exposure depend on where people live and move, so identifying local hotspots is important for risk assessment and for targeting interventions [@di2016].
+Air pollution is a major public health concern. Recent estimates from the State of Global Air 2025 report suggest that air pollution contributed to 7.9 million deaths worldwide in 2023, highlighting it as one of the leading environmental risk factors for death [@hei2025soga]. Long term exposure to PM2.5 has been consistently associated with increased all cause mortality and with diseases such as respiratory infections, chronic obstructive pulmonary disease, ischemic heart disease, lung cancer, and stroke [@cohen2017; @burnett2018]. In many settings, PM2.5 is studied together with other key pollutants, especially PM10 and ozone, which are also linked to adverse health outcomes. Ozone has been associated with all cause, cardiovascular, and respiratory mortality [@gryparis2004acute; @nuvolone2018effects], and particulate matter, including PM2.5 and PM10, shows harmful effects even under short term exposure, contributing to mortality, morbidity, and adverse birth outcomes [@pascal2014shortterm; @lu2015systematic; @feng2016health]. Finally, aerosols are often summarized through Aerosol Optical Depth (AOD), a unitless measure widely available from satellite and reanalysis products that provides broad spatio-temporal coverage and is frequently used to support air quality monitoring alongside ground observations [@rapetal2013aod].
 
-In many settings, PM2.5 is studied together with other key pollutants, especially PM10 and Ozone. Ozone (O3) has been linked to all cause, cardiovascular, and respiratory mortality [@gryparis2004acute; @nuvolone2018effects], and particulate matter including PM2.5 and PM10 has shown adverse effects even under short term exposure, contributing to mortality, morbidity, and adverse birth outcomes [@pascal2014shortterm; @lu2015systematic; @feng2016health]. From a practical perspective, this motivates working at a finer spatial scale, since coarse maps can hide localized areas with elevated concentrations [@di2016]. Since these pollutants are often related (at least pairwise), we model them jointly to account for their multivariate spatial structure and to obtain a more coherent set of maps across pollutants, rather than treating each pollutant independently [@ozoneandpm25;@linearpm25andpm10].
+Despite their importance, many air quality products are only available on coarse spatial or spatio temporal supports, for example CAMS reanalysis products [@inness2019cams]. This can hide local variation and make it difficult to identify small areas with high concentrations. Disaggregation models address this problem by assuming an underlying latent process at a finer scale and linking it to aggregated observations through an aggregation operator, while providing uncertainty quantification and allowing the inclusion of high resolution covariates. In this paper, we focus on a practical R workflow based on the models developed in [@RodriguezAvellanedaMult; @avellaneda2025bayesianspatiotemporaldisaggregationmodeling], and we show how to implement spatial, multivariate, and spatio temporal disaggregation with `r pkg("INLA")`.
 
-Aerosols, commonly quantified through Aerosol Optical Depth (AOD), are a key component of atmospheric composition with important implications for both climate and human health [@rapetal2013aod]. In particular, AOD at 550 nm is a unitless measure that summarizes how much aerosols in the atmospheric column attenuate light at a reference wavelength in the visible spectrum [@noaa_aod_atbd]. Because AOD provides broad spatial coverage from satellite and reanalysis products, it is often combined with chemical transport models and ground measurements to estimate or forecast surface particulate matter, which makes it useful for air quality monitoring and exposure studies [@vandonkelaar2010; @vandonkelaar2006]. Beyond air quality applications, aerosols also influence the Earth’s radiative balance and cloud processes, so AOD is directly connected to climate related impacts and their downstream effects [@ipcc2013; @tai2014threat].
+We start with a univariate spatial example, where we disaggregate PM2.5 concentrations in Portugal from the coarse CAMS grid to a finer resolution, downscaling from 0.1$^\circ$ to 0.02$^\circ$, which corresponds approximately to a change from 10 km to 2 km. We then extend the framework to a multivariate setting using the Linear Model of Coregionalization (LMC), jointly disaggregating PM2.5, PM10, and ozone over Portugal using the same CAMS product [@inness2019cams], targeting the same spatial refinement. Finally, we move to the spatio-temporal setting and disaggregate Aerosol Optical Depth (AOD) at 550 nm over India using the EAC4 reanalysis from ECMWF [@inness2019cams]. In that example, we refine the spatial resolution from $0.75^\circ$ to $0.25^\circ$ and the temporal resolution from 3-hourly to hourly, producing spatio-temporal predictions at intermediate time points that are not available in the original product.
 
-Despite their importance, many air quality products are only available on coarse spatial or spatio temporal supports, for example CAMS reanalysis products [@copernicus_data; @inness2019cams]. This can hide local variation and make it difficult to identify small areas with high concentrations. Disaggregation models address this problem by assuming an underlying latent process at a finer scale and linking it to aggregated observations through an aggregation operator, while providing uncertainty quantification and allowing the inclusion of high resolution covariates. In this paper, we focus on a practical R workflow based on the models developed in [@RodriguezAvellanedaMult; @avellaneda2025bayesianspatiotemporaldisaggregationmodeling], and we show how to implement spatial, multivariate, and spatio temporal disaggregation with `r pkg("INLA")`.
+Disaggregation has been studied under several modeling strategies. A common geostatistical approach assumes an underlying continuous latent process and links areal observations to it through a change-of-support operator, which allows prediction on finer grids but can be computationally demanding when aggregation integrals require approximation [@tanaka2019spatiallya; @yousefi2019multitaska]. In R the package `r pkg("disaggregation")` provides a streamlined workflow for Bayesian spatial disaggregation regression implemented in Template Model Builder (TMB). Inference is based on a Laplace approximation, and the paper shows that running a full MCMC alternative via tmbstan can be prohibitively slow in comparison (e.g., about 56 hours for MCMC versus 85 seconds with the Laplace approach in one example) [@nandi2023disaggregation]. The package focuses on spatial disaggregation, and extensions to spatio-temporal settings are discussed as future work, so it does not directly cover the multivariate and spatio-temporal models in this paper [@nandi2023disaggregation].
 
-We start with a univariate spatial example, where we disaggregate PM2.5 concentrations in Portugal from the coarse CAMS grid to a finer resolution, downscaling from 0.1$^\circ$ to 0.02$^\circ$, which corresponds approximately to a change from 10 km to 2 km. We then extend the framework to a multivariate setting using the Linear Model of Coregionalization (LMC), jointly disaggregating PM2.5, PM10, and ozone over Portugal using the same CAMS product [@copernicus_data], targeting the same spatial refinement. Finally, we move to the spatio-temporal setting and disaggregate Aerosol Optical Depth (AOD) at 550 nm over India using the EAC4 reanalysis from ECMWF [@inness2019cams]. In that example, we refine the spatial resolution from $0.75^\circ$ to $0.25^\circ$ and the temporal resolution from 3-hourly to hourly, producing spatio-temporal predictions at intermediate time points that are not available in the original product.
-
-Portugal and India were chosen as case studies because they provide clear and realistic settings for disaggregation while keeping the examples computationally manageable. Portugal has a moderate spatial extent, strong coastal influences, and noticeable topographic variation, which makes it a useful region to illustrate how fine scale covariates can help recover local pollution patterns from coarse grids. India provides a larger and more heterogeneous domain, with diverse topography and regions with high aerosol load, making it a relevant example for spatio-temporal disaggregation.
-
-Unlike traditional Bayesian inference methods such as Markov chain Monte Carlo (MCMC), which can be computationally intensive for high-dimensional spatial and spatio-temporal models, our approach relies on the SPDE representation that links Gaussian processes to Gaussian Markov random fields (GMRFs) on a spatial or spatio temporal mesh. This link is important because GMRFs have sparse precision matrices, which makes inference fast and scalable with the integrated nested Laplace approximation implemented in `r pkg("INLA")`. 
+Across the settings in this paper, our disaggregation is built around the Stochastic Partial Differential Equation (SPDE) approach. We assume an underlying continuous latent Gaussian field that represents the process at the fine scale, but we only observe it through measurements aggregated over regions (and, in the spatio-temporal case, over time windows). The SPDE formulation lets us represent this latent field on a triangulated mesh as a Gaussian Markov random field, and the aggregation step is handled through a sparse projection matrix that links the mesh to the observed supports. Covariates are included at the fine scale, so the model can explain local variation using information available at higher resolution than the observations, and after inference we obtain predictions on a finer grid with uncertainty quantification. Although we focus on air pollution applications here, the same workflow can be used in many other settings where data are observed on coarse supports but decisions require finer-scale estimates [@forlani2020joint; @zhong2023spatial; @gomez2019multivariate].
 
 The remainder of the paper is organized as follows. In Section \@ref(sec:methods) we summarize the main disaggregation framework and how it is implemented in R-INLA. We then present three worked examples: Section \@ref(sec:spatial-dis) covers a univariate spatial disaggregation of PM2.5 in Portugal, Section \@ref(sec:mult) extends the approach to a multivariate model for PM2.5, PM10, and ozone in Portugal, and Section \@ref(sec:spatio-temp) presents a spatio-temporal disaggregation example for AOD at 550 nm in India. We close with a short conclusions section, summarizing practical takeaways and possible extensions.
-
 
 # Methodology {#sec:methods}
 
@@ -136,7 +136,7 @@ K_{\nu}\left(\kappa\left\|\mathbf{s}_i-\mathbf{s}_k\right\|\right),
 
 where $\sigma^{2}$ is the marginal variance, $K_{\nu}(\cdot)$ is the modified Bessel function of the second kind, and $\nu>0$ controls the smoothness of the field. In practice, $\nu$ is often fixed for stability. The parameter $\kappa>0$ controls the spatial range, and a common practical definition is $\rho = \sqrt{8\nu}/\kappa$. This Matérn specification is also convenient for computation, since it has a direct SPDE representation that can be implemented efficiently on a triangulated mesh within the INLA framework.
 
-## SPDE-based inference with `r pkg("INLA")` for spatial disaggregation {#sec:inla-inf-spa}
+## Implementation of spatial disaggregation with INLA-SPDE {#sec:inla-inf-spa}
 
 For the univariate spatial model in Section \@ref(sec:uni-mod) and the multivariate spatial model in Section \@ref(sec:mult-mod), inference is performed using the SPDE approach implemented in `r pkg("INLA")`. As described in Section \@ref(sec:spa-matern), we assume a Matérn covariance structure for the spatial random effect, that is, for $z(\mathbf{s})$ in the univariate case and for each independent component $z_j(\mathbf{s})$, $j=1,\ldots,M$, in the multivariate case. The main idea is that a Matérn Gaussian process can be represented as the solution of an SPDE [@whittle1963stochastic]. Since the same construction applies to each latent field, without loss of generality we describe it for a generic field $\hat{z}(\mathbf{s})$.
 
@@ -167,7 +167,7 @@ A_{ik}=\frac{|R_{ik}|}{|R_i|}.
 \end{split}
 (\#eq:des)
 \end{align}
-The matrix $\mathbf{A}=(A_{ik})$ is the projection (aggregation) matrix that maps the latent field from the mesh nodes to the areal supports. By construction, $A_{ik}\ge 0$ and each row sums to one, $\sum_k A_{ik}=1$. In practice, when the mesh is close to regular, we often use the simplified choice $A_{ik}=1/n_i$ for the $n_i$ mesh nodes that fall inside region $R_i$. Figure (\@ref(fig:mesh)) illustrates this idea for a rectangular region $R_i$ overlaid with a triangular mesh: the green vertices ($g_1,\ldots,g_{19}$) are the mesh nodes that fall inside $R_i$, while the black vertices lie outside. In this setting, we can simplify the projection matrix as by assigning equal weight to each node inside the region. Since there are 19 vertices inside $R_i$, the $i$th row of $\mathbf{A}$ has $A_{ik}=1/19$ for those 19 nodes and $A_{ik}=0$ for all other nodes.
+The matrix $\mathbf{A}=(A_{ik})$ is the projection (aggregation) matrix that maps the latent field from the mesh nodes to the areal supports. By construction, $A_{ik}\ge 0$ and each row sums to one, $\sum_k A_{ik}=1$. In practice, when the mesh is close to regular, we often use the simplified choice $A_{ik}=1/n_i$ for the $n_i$ mesh nodes that fall inside region $R_i$. Figure (\@ref(fig:mesh-example)) illustrates this idea for a rectangular region $R_i$ overlaid with a triangular mesh: the green vertices ($g_1,\ldots,g_{19}$) are the mesh nodes that fall inside $R_i$, while the black vertices lie outside. In this setting, we can simplify the projection matrix as by assigning equal weight to each node inside the region. Since there are 19 vertices inside $R_i$, the $i$th row of $\mathbf{A}$ has $A_{ik}=1/19$ for those 19 nodes and $A_{ik}=0$ for all other nodes.
 
 ```{r mesh-example, fig.cap="Example of a rectangular region $R_i$ overlaid on a triangulated mesh, where the green vertices are the mesh nodes inside $R_i$ and are used to define the projection matrix A.", fig.align="center", out.width="60%", fig.align="center"}
 knitr::include_graphics("images/mesh.jpg")
@@ -175,13 +175,44 @@ knitr::include_graphics("images/mesh.jpg")
 
 This construction is the same for the univariate and multivariate spatial models. In the univariate case, $\mathbf{A}$ links the latent field to the areal observations in Equation \@ref(eq:mult-areal). In the multivariate case, the same projection idea is applied to each independent component $z_j(\mathbf{s})$, $j=1,\ldots,M,$ and the LMC structure is then obtained by combining these projected components according to Equation \@ref(eq:mult-cont). In `r pkg("INLA")`, these mappings are implemented by defining the SPDE model on the mesh and supplying the projection matrices in the `inla.stack()` objects for estimation and prediction.
 
+## INLA essentials: installation and main workflow {#sec:inla-essentials}
+
+Before running the examples in this paper, we need to install `r pkg("INLA")` and a small set of supporting packages for handling rasters, vector geometries, and meshes. Note that `r pkg("INLA")` is installed from the INLA repository (not from CRAN). The spatio-temporal example additionally uses `r pkg("INLAspacetime")`.
+
+```{r inla-install, eval=FALSE}
+# Install INLA from the INLA repository (not CRAN)
+install.packages(
+  "INLA",
+  repos = c(getOption("repos"), INLA = "https://inla.r-inla-download.org/R/stable"),
+  dependencies = TRUE
+)
+
+# Only needed for the spatio-temporal example
+install.packages("INLAspacetime")
+
+# Quick check
+library(INLA)
+inla.version()
+```
+
+Once the data and covariates are ready, the INLA workflow in this paper follows a fairly standard sequence. First, we build a triangulated mesh to represent the latent field with the SPDE approach. In our examples, the mesh is constructed over the study region using functions such as $\texttt{fm_hexagon_lattice()}$ and $\texttt{fm_mesh_2d()}$ (from `r pkg("fmesher")`), choosing parameters like $\texttt{max.edge}$ and $\texttt{offset}$ so the mesh is finer than the original data support. In the spatio-temporal case, we also create a one-dimensional temporal mesh with $\texttt{inla.mesh.1d()}$ and combine these together to have a spatio-temporal mesh.
+
+Next, we define prediction locations on the target resolution, using helpers such as $\texttt{st_make_grid()}$, $\texttt{seq()}$, and $\texttt{expand.grid()}$. For the spatio-temporal example, we extend the prediction set by combining the spatial prediction grid with a time index, so the same locations are repeated across the time points where we want predictions. Finally, for both estimation and prediction, the covariates must be available on the same supports as the response. In the spatio-temporal case, if a covariate does not vary in time, we simply replicate its spatial values across the time index so it matches the space–time prediction set.
+
+Model specification in INLA is done by translating the linear predictor into a formula and defining the latent SPDE component. In the spatial models, the Matérn SPDE is created with $\texttt{inla.spde2.matern()}$, and the latent field enters the formula through terms like $\texttt{f(s, model = spde)}$. In the multivariate example, the LMC structure is implemented by combining shared and pollutant-specific fields and using $\texttt{copy=}$ terms (with $\texttt{fixed=FALSE}$) to estimate the scaling parameters. In the spatio-temporal example, we use `r pkg("INLAspacetime")` to define a spatio-temporal SPDE model (via $\texttt{stModel.define()}$) and include it in the formula through $\texttt{f(st, model = stmodel)}$.
+
+To connect the data support (coarse cells, and coarse time windows in the spatio-temporal case) to the mesh representation, we build projection matrices and assemble the stacks. Spatially, the key object is the projection matrix (e.g., $\texttt{A.m}$ from regions to mesh nodes, and $\texttt{A.pr}$ from mesh nodes to prediction points). In practice, we pass these matrices to $\texttt{inla.stack()}$ through its $\texttt{A=}$ argument, and we build separate stacks for estimation and prediction, which are then combined into a single object (e.g., $\texttt{stk.full}$). For the spatio-temporal setting, we build the spatial and temporal projection components separately and combine them (for example using $\texttt{kronecker()}$) to obtain the full spatio-temporal projection matrix used in the stacks.
+
+Finally, we fit the model with $\texttt{inla()}$. The stacked data are provided with $\texttt{inla.stack.data()}$, and the corresponding projection matrix is passed through $\texttt{control.predictor = list(A = inla.stack.A(...), compute = TRUE)}$ so INLA returns fitted values and predictions. Predictions are retrieved using $\texttt{inla.stack.index()}$ to select the prediction rows, and then extracting the posterior summaries from $\texttt{res\$summary.linear.predictor}$. Fixed-effect summaries are obtained from $\texttt{res\$summary.fixed}$, and the same workflow extends naturally from the univariate spatial example to the multivariate and spatio-temporal settings by changing the model formula and the stack/projection structure. citation("sf")
+
+
 # Spatial disaggregation of PM2.5 concentration in Portugal {#sec:spatial-dis}
 
-In this section, we illustrate spatial disaggregation by improving the resolution of PM2.5 concentrations in Portugal from 10km to 2km. We used annual air quality reanalysis data for Portugal provided by the Copernicus Atmosphere Monitoring Service (CAMS) [@copernicus_data], a high-resolution product developed by the European Centre for Medium-Range Weather Forecasts (ECMWF). This publicly accessible dataset, available at https://ads.atmosphere.copernicus.eu/datasets/cams-europe-air-quality-reanalyses, integrates satellite observations and auxiliary information to get estimations of air pollution levels in a very corase resolution.
+In this section, we illustrate spatial disaggregation by improving the resolution of PM2.5 concentrations in Portugal from 10km to 2km. We used annual air quality reanalysis data for Portugal provided by the Copernicus Atmosphere Monitoring Service (CAMS) [@inness2019cams], a high-resolution product developed by the European Centre for Medium-Range Weather Forecasts (ECMWF). This publicly accessible dataset, available at https://ads.atmosphere.copernicus.eu/datasets/cams-europe-air-quality-reanalyses, integrates satellite observations and auxiliary information to get estimations of air pollution levels in a very corase resolution.
 
 ## PM2.5 disaggregation model
 
-The main objective of this model is to perform spatial disaggregation by increasing the resolution from $0.1^\circ$ to $0.02^\circ$, which corresponds approximately to a change from 10 km to 2 km, using `r pkg("INLA")`. We also include elevation as a high-resolution covariate to help explain local variation in PM$_{2.5}$ and improve the disaggregation. We assume the existence of a latent continuous spatial process for PM$_{2.5}$ that is observed only through aggregated measurements. The link between the latent field and the areal observations is defined through Equations \@ref(eq:spa-cont), \@ref(eq:spa-agg), and \@ref(eq:spa-areal). Inference is then performed using the projection (aggregation) matrix described in Section \@ref(sec:inla-inf-spa).
+The main objective of this model is to perform spatial disaggregation by increasing the resolution from $0.1^\circ$ to $0.02^\circ$, which corresponds approximately to a change from 10 km to 2 km, using `r pkg("INLA")`. We also include elevation as a high-resolution covariate to help explain local variation in PM2.5 and improve the disaggregation. We assume the existence of a latent continuous spatial process for PM2.5 that is observed only through aggregated measurements. The link between the latent field and the areal observations is defined through Equations \@ref(eq:spa-cont), \@ref(eq:spa-agg), and \@ref(eq:spa-areal). Inference is then performed using the projection (aggregation) matrix described in Section \@ref(sec:inla-inf-spa).
 
 \begin{equation}
 \text{pm}_{2.5}(\mathbf{s}) = \beta_0 + \beta_1\,\text{elevation}(\mathbf{s}) + z(\mathbf{s}) + e(\mathbf{s}) (\#eq:app-pm25)
@@ -485,7 +516,6 @@ p2 <- ggplot(map_pred) +
 # Combine plots
 p1 + p2
 ```
-
 
 # Multivariate Spatial disaggregation of PM2.5, PM10 and Ozone concentrations in Portugal. {#sec:mult}
 
@@ -1022,7 +1052,7 @@ The solution $v(\mathbf{s},t)$ defines a Gaussian process. In this parameterizat
 \end{equation}
 where $\nu_s$ denotes the smoothness of the spatial process and $\beta_s\in[0,1]$, with $\beta_s=0$ corresponding to a separable model and $\beta_s=1$ to a fully nonseparable model [@lindgren2023inlaspacetime]. In this paper, we use the nonseparable first-order diffusion model with $(\alpha_t,\alpha_s,\alpha_e)=(1,2,1)$, which corresponds to the $\texttt{model = "121"}$ specification in `r pkg("INLAspacetime")`.
 
-## Inference with `r pkg("INLA")` for the spatio-temporal model {#sec:inla-inf-st}
+## Implementation of spatio-temporal disaggregation with INLA-SPDE {#sec:inla-inf-st}
 
 For the spatio-temporal model in Section \@ref(sec:st-mod), inference is also based on the SPDE approach. Here the random effect $z(\mathbf{s},t)$ is defined through the diffusion-based spatio-temporal SPDE introduced in the Equation \@ref(eq:diffusion), and we approximate it on a joint space–time mesh using `r pkg("INLA")` together with `r pkg("INLAspacetime")` [@Lindgren2011; @rue_et_al_r_inla_2009; @lindgren2023inlaspacetime]. The main difference from the purely spatial case is that we now use a triangulated mesh in space and a one-dimensional mesh in time, and we work with their product, which results in $G\times D$ basis functions over the space–time domain.
 
@@ -1177,7 +1207,7 @@ ggplot(df_st, aes(x = longitude, y = latitude, fill = value)) +
 
 ### Covariates
 
-We incorporate elevation as a covariate using the SRTM30$+$ Version $11$ land surface digital elevation model (DEM), produced by the Scripps Institution of Oceanography (SIO), which provides global land elevation at approximately $1$~km resolution on a regular latitude longitude grid \cite{SRTM30plus_v11_land_PacIOOS_2014}. Elevation is included to relate AOD variability to topography and to improve the explanatory power of the spatio temporal disaggregation model over India. We obtain the elevation data through the ERDDAP API by submitting a query that downloads only the spatial window covering the study region. In R, we use the package `r pkg("curl")` to download the resulting NetCDF file, which is then read as a raster with `r pkg("terra")`. Figure (\@ref(fig:elev-st-plot-1)) shows the resulting elevation raster over India, with values reported in meters.
+We incorporate elevation as a covariate using the SRTM30$+$ Version $11$ land surface digital elevation model (DEM), produced by the Scripps Institution of Oceanography (SIO), which provides global land elevation at approximately $1$~km resolution on a regular latitude longitude grid [@SRTM30plus_v11_land_PacIOOS_2014]. Elevation is included to relate AOD variability to topography and to improve the explanatory power of the spatio temporal disaggregation model over India. We obtain the elevation data through the ERDDAP API by submitting a query that downloads only the spatial window covering the study region. In R, we use the package `r pkg("curl")` to download the resulting NetCDF file, which is then read as a raster with `r pkg("terra")`. Figure (\@ref(fig:elev-st-plot-1)) shows the resulting elevation raster over India, with values reported in meters.
 
 ```{r elev-st-plot-1, fig.cap="Elevation over India (meters) from the SRTM30$+$ v11 DEM, cropped to the study region and used as a covariate in the spatio-temporal AOD model." , fig.align='center', include=TRUE, echo=TRUE}
 # Time consuming: This code takes 1 minute to be executed
@@ -1522,3 +1552,4 @@ p2 <- ggplot(dpdf_st[dpdf_st$time <= 9, ], aes(x = x, y = y, fill = pred)) +
 
 
 # References
+
