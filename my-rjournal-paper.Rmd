@@ -40,7 +40,10 @@ bibliography:
 - RJreferences.bib
 - packages.bib
 nocite: |
-  @*
+  @R-patchwork, @R-ggplot2, @R-viridis, @R-kableExtra, @R-terra,
+  @R-rnaturalearth, @R-sf, @R-tidyterra, @R-fmesher, @R-INLA,
+  @R-INLAspacetime, @R-curl
+reference-section-title: References
 header-includes:
 - \usepackage{ragged2e}
 - \justifying
@@ -69,8 +72,11 @@ pkg <- function(x) {
   }
 }
 
-knitr::write_bib(c(.packages()), "packages.bib")
+#knitr::write_bib(c(.packages()), "packages.bib",prefix = getOption("knitr.bib.prefix", "R-"))
+```
 
+```{=latex}
+\nocite{R-patchwork,R-ggplot2,R-viridis,R-kableExtra,R-terra,R-rnaturalearth,R-sf,R-tidyterra,R-fmesher,R-INLA,R-INLAspacetime,R-curl}
 ```
 
 # Introduction
@@ -644,7 +650,7 @@ write.csv(dfm, "data/mult-data.csv", row.names = FALSE)
 
 Figure (\@ref(fig:mult-plot)) displays the spatial distribution of mean PM2.5, PM10, and ozone over Portugal for January 2019 on the original CAMS grid (about 0.1$^\circ$, roughly 10 km), which is relatively coarse for local-scale interpretation. The maps suggest a positive spatial association between PM2.5 and PM10, with areas of higher PM2.5 generally aligning with higher PM10. In contrast, ozone shows an opposite spatial pattern, indicating a negative spatial association with PM2.5 and PM10, where higher particulate concentrations tend to coincide with lower ozone levels.
 
-```{r mult-plot, fig.width=12, fig.height=5, fig.align='center', fig.cap="Mean PM2.5, PM10 and Ozone concentration in Portugal during January 2019. Country boundaries for Portugal and Spain are overlaid for geographic reference.", include=TRUE, echo=TRUE}
+```{r mult-plot, out.width=if(knitr::is_latex_output()) "0.95\\linewidth" else NULL, fig.width=12, fig.height=5, fig.align='center', fig.cap="Mean PM2.5, PM10 and Ozone concentration in Portugal during January 2019. Country boundaries for Portugal and Spain are overlaid for geographic reference.", include=TRUE, echo=TRUE}
 # Read dataset from preprocess file
 dfm <- read.csv("data/mult-data.csv")
 
@@ -697,7 +703,7 @@ p3 <- ggplot() +
 p1+p2+p3
 ```
 
-For the multivariate model, we use the same elevation covariate as in the univariate case described in Section \@ref(sec:cov). Specifically, we rely on the EuroDEM product maintained by EuroGeographics [@eurogeographics2023eurodem] and use the same preprocessed raster `eurodemc.tif`, which is already reprojected to EPSG:4326, aggregated, and cropped to Portugal. Since the elevation covariate download and preprocessing steps were already described in the univariate workflow in Section @ref(sec:cov), we do not repeat the code here.
+For the multivariate model, we use the same elevation covariate as in the univariate case described in Section \@ref(sec:cov). Specifically, we rely on the EuroDEM product maintained by EuroGeographics [@eurogeographics2023eurodem] and use the same preprocessed raster `eurodemc.tif`, which is already reprojected to EPSG:4326, aggregated, and cropped to Portugal. Since the elevation covariate download and preprocessing steps were already described in the univariate workflow in Section \@ref(sec:cov), we do not repeat the code here.
 
 ## INLA modeling
 
@@ -947,7 +953,7 @@ Table (\@ref(tab:tab-fixed-mult)) summarizes the posterior distributions of the 
 
 After fitting the model, Figure (\@ref(fig:pred-plot-mult)) shows the three pollutants together, with PM2.5, PM10, and ozone on the coarse CAMS grid in the first row and the corresponding posterior mean predictions on the finer grid in the second row. As in the univariate case, the finer grid predictions shows more local spatial variation, and the predicted values can span a slightly wider range than the coarse inputs, which helps bring out possible hotspots or cleaner areas that are hidden at 0.1$^\circ$ resolution. The main added value here is that the three pollutants are modeled jointly, so the predictions also use the spatial dependence between pollutants, allowing the model to borrow information across PM2.5, PM10, and ozone and produce a more coherent multivariate disaggregation.
 
-```{r pred-plot-mult, fig.width=12, fig.height=10, fig.cap="Observed and disaggregated pollutant fields over Portugal. The top row shows the observed mean PM2.5, PM10, and ozone on the coarse CAMS grid, and the bottom row shows the corresponding posterior mean predictions from the multivariate disaggregation model on the finer grid. Country boundaries are overlaid for reference.", fig.align='center', include=TRUE, echo=TRUE}
+```{r pred-plot-mult, out.width=if(knitr::is_latex_output()) "0.95\\linewidth" else NULL, fig.width=12, fig.height=10, fig.cap="Observed and disaggregated pollutant fields over Portugal. The top row shows the observed mean PM2.5, PM10, and ozone on the coarse CAMS grid, and the bottom row shows the corresponding posterior mean predictions from the multivariate disaggregation model on the finer grid. Country boundaries are overlaid for reference.", fig.align='center', include=TRUE, echo=TRUE}
 
 # get indexes of each response variable
 idx.y1 <- inla.stack.index(stk.full.m, 'y1.pred')$data
@@ -1149,7 +1155,7 @@ head(df_long) |>
 
 After converting the dataset to long format, we filter it to the study region of interest, India. Figure (\@ref(fig:aod-plot)) shows the spatial distribution of AOD over India for the first day of January 2024, giving a first look at the main spatial patterns and areas with higher aerosol load. The object `sq_st` defines the spatial domain used in this study. In spatio-temporal modeling, keeping a very large region increases the number of spatial locations and, as a result, the model becomes more computationally demanding and takes longer to fit. For this reason, we also provide, as commented code, a smaller domain that can be used to reduce computational cost. A comparison of fitting and prediction times for the larger and smaller domains is discussed in Section \@ref(sec:st-fit). Finally, to avoid working with the full global dataset, we provide the filtered long format dataset for India as `data-st.csv`.
 
-```{r aod-plot, fig.width=10, fig.height=6, fig.cap="Aerosol Optical Depth (AOD) values over the study region in India on January 1, 2024, at 3-hour intervals from 00:00 to 21:00 UTC. Each panel shows the spatial distribution of AOD on the original grid, with the boundary of India overlaid in black.", fig.align='center', include=TRUE, echo=TRUE}
+```{r aod-plot, out.width=if(knitr::is_latex_output()) "0.95\\linewidth" else NULL, fig.width=10, fig.height=6, fig.cap="Aerosol Optical Depth (AOD) values over the study region in India on January 1, 2024, at 3-hour intervals from 00:00 to 21:00 UTC. Each panel shows the spatial distribution of AOD on the original grid, with the boundary of India overlaid in black.", fig.align='center', include=TRUE, echo=TRUE}
 
 # Define the squared study region and convert to dataframe
 sq_st <- ext(64.875, 90.375, 5.625, 33.375) # big
@@ -1240,7 +1246,7 @@ After obtaining the AOD spatio-temporal dataset and the elevation covariate, we 
 
 In this section, we specify the spatio temporal mesh and other elements used for disaggregation. We reuse the spatial triangulated mesh from the univariate case in Section \@ref(sec:mesh) and introduce a one dimensional temporal mesh over the study period. We also define the input spatial grid and the spatio temporal prediction locations used to obtain estimates at the finer resolution. Figure (\@ref(fig:mesh-st-plot)) summarizes these elements. The first panel shows a portion of the triangulated spatial mesh, represented by black segments, together with the coarse input grid, shown in red. The second panel shows the spatial prediction locations, shown as blue points, defined within each coarse grid cell. The third panel shows the temporal mesh as a sequence of knots along the time axis, red dots are the observations and black dots are the mesh points. To achieve the spatial disaggregation from $0.75^\circ$ to $0.25^\circ$, we define prediction locations within each coarse cell using the spatial factor `spf_st=3`, which increases the number of locations per cell by a factor of $3 \times 3 = 9$. To refine the temporal resolution from 3 hourly to hourly, we use the temporal factor `tf=3`, which introduces intermediate time points between the original observations.
 
-```{r mesh-st-plot, fig.width=10, fig.height=4, fig.cap="Spatio temporal discretization for AOD disaggregation. Left, triangulated spatial mesh (black) overlaid with the coarse input grid (red). Middle, spatial prediction locations (blue) defined within each coarse cell for spf\\_st = 3. Right, one dimensional temporal mesh, red dots observation points, black dots mesh points.", fig.align='center', include=TRUE, echo=TRUE}
+```{r mesh-st-plot, out.width=if(knitr::is_latex_output()) "0.95\\linewidth" else NULL, fig.width=10, fig.height=4, fig.cap="Spatio temporal discretization for AOD disaggregation. Left, triangulated spatial mesh (black) overlaid with the coarse input grid (red). Middle, spatial prediction locations (blue) defined within each coarse cell for spf\\_st = 3. Right, one dimensional temporal mesh, red dots observation points, black dots mesh points.", fig.align='center', include=TRUE, echo=TRUE}
 # Initial squared grid
 map_st <- st_as_sf(st_make_grid(sq_st, n = c(length(unique(df_st$longitude)),
                                length(unique(df_st$latitude)))))
@@ -1483,7 +1489,7 @@ Table (\@ref(tab:tab-fixed-st)) summarizes the posterior distributions of the fi
 
 After fitting the model, Figure (\@ref(fig:pred-plot-st)) summarizes the spatio-temporal disaggregation results for the first hours of January 1, 2024. The first column shows the observed AOD on the original coarse resolution at 00:00, 03:00, and 06:00. The remaining columns show the posterior mean predictions on the finer spatio-temporal grid, providing hourly maps from 00:00 to 08:00. The disaggregated fields add spatial detail and can show a slightly wider range than the coarse observations, which helps reveal localized areas with higher or lower aerosol load that may be hidden at the original resolution. In time, the model fills the gaps between the 3-hour observations in a smooth way, producing intermediate hourly maps that remain consistent with the observed patterns while avoiding abrupt changes between time steps.
 
-```{r pred-plot-st, fig.width=12, fig.height=10, fig.cap="Observed and disaggregated AOD over India for January 1, 2024. The first column shows observed AOD at 3-hour resolution, and the remaining panels show posterior mean predictions from the spatio-temporal disaggregation model at hourly resolution from 00:00 to 08:00.", fig.align='center', include=TRUE, echo=TRUE}
+```{r pred-plot-st, out.width=if(knitr::is_latex_output()) "0.95\\linewidth" else NULL, fig.width=12, fig.height=10, fig.cap="Observed and disaggregated AOD over India for January 1, 2024. The first column shows observed AOD at 3-hour resolution, and the remaining panels show posterior mean predictions from the spatio-temporal disaggregation model at hourly resolution from 00:00 to 08:00.", fig.align='center', include=TRUE, echo=TRUE}
 
 idx.y <- inla.stack.index(stk.full.st, 'y.pred')$data
 dpdf_st$pred <- res_st$summary.linear.predictor[idx.y, "mean"]
@@ -1557,8 +1563,5 @@ In the applications, this framework produces disaggregated maps that keep the la
 In this paper, we focus on a practical R workflow based on the models developed in [@RodriguezAvellanedaMult; @avellaneda2025bayesianspatiotemporaldisaggregationmodeling], and we show how to implement spatial, multivariate, and spatio-temporal disaggregation with `r pkg("INLA")`. The multivariate spatial model in [@RodriguezAvellanedaMult] is presented for Gaussian responses, so a natural extension is to develop the same type of multivariate disaggregation for non-Gaussian data, for example Poisson or Binomial outcomes such as disease counts over administrative units. On the spatio-temporal side, recent work has proposed efficient spatial disaggregation methods for spatio-temporal datasets [@gaedke2025acceleratedspatiotemporalbayesianmodeling], while our spatio-temporal model in [@avellaneda2025bayesianspatiotemporaldisaggregationmodeling] goes one step further by disaggregating not only in space but also in time. A further direction is to combine these ideas and build multivariate spatio-temporal disaggregation models that jointly downscale multiple variables across space and time, and that can handle variables observed on different spatial or temporal supports within a single coherent framework [@zhongetal25].
 
 Overall, this paper presents a practical disaggregation workflow based on latent Gaussian fields and the INLA–SPDE framework, which scales well and can be adapted to spatial, multivariate spatial, and spatio-temporal settings. Although we focus on air pollution applications, the same framework applies to other continuous variables observed on coarse spatial or spatio-temporal supports, where the goal is to recover the underlying process at a finer resolution with uncertainty quantification. Examples include remotely sensed or reanalysis products such as land-surface temperature, precipitation, soil moisture, sea-surface temperature, and vegetation indices, as well as other environmental exposures available as gridded averages [@moragaandbaker22; @forlani2020joint; @zhong2023spatial; @gomez2019multivariate].
-
-
-# References
 
 
