@@ -9,6 +9,7 @@ library(viridis)
 library(kableExtra)
 library(terra)
 library(rnaturalearth)
+library(exactextractr)
 library(sf)
 library(tidyterra)
 library(fmesher)
@@ -52,16 +53,17 @@ knitr::include_graphics("images/mesh.jpg")
 sq <- ext(-9.65, -6.05, 36.85, 42.25)
 
 # Read the dataset and compute mean value (From source)
-r <- rast("data/cams.eaq.vra.ENSa.pm2p5.l0.2019-01.nc")
-r_mean <- app(r, mean, na.rm = TRUE)
-r_sq <- crop(r_mean, sq)
-df <- as.data.frame(r_sq, xy = TRUE, na.rm = TRUE)
-df <- df[order(df$y, df$x), ]
-names(df) <- c("longitude", "latitude", "pm2p5")
-write.csv(df, "data/pm2p5_portugal.csv", row.names = FALSE)
+# r <- rast("data/cams.eaq.vra.ENSa.pm2p5.l0.2019-01.nc")
+# r_mean <- app(r, mean, na.rm = TRUE)
+# r_sq <- crop(r_mean, sq)
+# df <- as.data.frame(r_sq, xy = TRUE, na.rm = TRUE)
+# df <- df[order(df$y, df$x), ]
+# names(df) <- c("longitude", "latitude", "pm2p5")
+# write.csv(df, "data/pm2p5_portugal.csv", row.names = FALSE)
 
 # Read dataset from preprocess file
 df <- read.csv("data/pm2p5_portugal.csv")
+r_sq <- rast(df[, c("longitude", "latitude", "pm2p5")])
 
 # Get portugal and Spain borders
 boundary <- ne_countries(scale="medium", returnclass="sf") |>
@@ -152,9 +154,11 @@ plot(dpdf_sf$geometry, add = TRUE, col = "blue", lwd = 1)
 
 ## ----elev-plot-2, fig.cap="Elevation over Portugal on the input grid (left) and the prediction grid (right), with country boundaries for reference.", fig.align='center', include=TRUE, echo=TRUE----
 # Time consuming: this part takes around 1 minute to be executed
+# Converting to Raster* object
+r_ras <- raster::raster(r_crop)
 
 # Extract elevation values in the original dataset
-map$elev <- terra::extract(r_crop, map, mean)$eurodem
+map$elev <- exact_extract(r_ras, map, "mean", progress = FALSE)
 
 # Create the prediction dataset in sf format
 map_pred <- st_as_sf(st_make_grid(sq, n = c(length(unique(df$longitude)),
@@ -162,7 +166,7 @@ map_pred <- st_as_sf(st_make_grid(sq, n = c(length(unique(df$longitude)),
 st_crs(map_pred) <- "EPSG:4326"
 
 # Extract elevation values in the prediction dataset
-map_pred$elev <- terra::extract(r_crop, map_pred, mean)$eurodem
+map_pred$elev <- exact_extract(r_ras, map_pred, "mean", progress = FALSE)
 
 # Plot elevation in the input grid
 p1 <- ggplot(map) +
@@ -189,7 +193,6 @@ p2 <- ggplot(map_pred) +
   )
 
 p1 + p2
-
 
 
 ## ----input-inla, include=TRUE, echo=TRUE--------------------------------------
@@ -304,36 +307,38 @@ p1 + p2
 # Define the squared study region and convert to dataframe
 sq <- ext(-9.65, -6.05, 36.85, 42.25)
 
-# Read the dataset, compute mean value and crop pm2.5 (From source)
-r_pm2p5 <- rast("data/cams.eaq.vra.ENSa.pm2p5.l0.2019-01.nc")
-r_mean_pm2p5 <- app(r_pm2p5, mean, na.rm = TRUE)
-r_sq_pm2p5 <- crop(r_mean_pm2p5, sq)
-
-# Read the dataset, compute mean value and crop pm10 (From source)
-r_pm10 <- rast("data/cams.eaq.vra.ENSa.pm10.l0.2019-01.nc")
-r_mean_pm10 <- app(r_pm10, mean, na.rm = TRUE)
-r_sq_pm10 <- crop(r_mean_pm10, sq)
-
-# Read the dataset, compute mean and crop Ozone (From source)
-r_o3 <- rast("data/cams.eaq.vra.ENSa.o3.l0.2019-01.nc")
-r_mean_o3 <- app(r_o3, mean, na.rm = TRUE)
-r_sq_o3 <- crop(r_mean_o3, sq)
-
-# Clean and standardize the data frame
-pm2p5 <- as.data.frame(r_sq_pm2p5, xy = TRUE, na.rm = TRUE)
-pm10 <- as.data.frame(r_sq_pm10, xy = TRUE, na.rm = TRUE)
-o3 <- as.data.frame(r_sq_o3, xy = TRUE, na.rm = TRUE)
-
-# Clean and standardize the data frame
-pm2p5 <- as.data.frame(r_sq_pm2p5, xy = TRUE, na.rm = TRUE)
-pm10 <- as.data.frame(r_sq_pm10, xy = TRUE, na.rm = TRUE)
-o3 <- as.data.frame(r_sq_o3, xy = TRUE, na.rm = TRUE)
-
-# Merge and organize information
-dfm <- Reduce(function(x, y) merge(x, y, by = c("x", "y")), list(pm2p5, pm10, o3))
-dfm <- dfm[order(dfm$y, dfm$x), ]
-names(dfm) <- c("longitude", "latitude", "pm2p5", "pm10", "ozone")
-write.csv(dfm, "data/mult-data.csv", row.names = FALSE)
+# # Read the dataset from source
+# 
+# # Read the dataset, compute mean value and crop pm2.5 (From source)
+# r_pm2p5 <- rast("data/cams.eaq.vra.ENSa.pm2p5.l0.2019-01.nc")
+# r_mean_pm2p5 <- app(r_pm2p5, mean, na.rm = TRUE)
+# r_sq_pm2p5 <- crop(r_mean_pm2p5, sq)
+# 
+# # Read the dataset, compute mean value and crop pm10 (From source)
+# r_pm10 <- rast("data/cams.eaq.vra.ENSa.pm10.l0.2019-01.nc")
+# r_mean_pm10 <- app(r_pm10, mean, na.rm = TRUE)
+# r_sq_pm10 <- crop(r_mean_pm10, sq)
+# 
+# # Read the dataset, compute mean and crop Ozone (From source)
+# r_o3 <- rast("data/cams.eaq.vra.ENSa.o3.l0.2019-01.nc")
+# r_mean_o3 <- app(r_o3, mean, na.rm = TRUE)
+# r_sq_o3 <- crop(r_mean_o3, sq)
+# 
+# # Clean and standardize the data frame
+# pm2p5 <- as.data.frame(r_sq_pm2p5, xy = TRUE, na.rm = TRUE)
+# pm10 <- as.data.frame(r_sq_pm10, xy = TRUE, na.rm = TRUE)
+# o3 <- as.data.frame(r_sq_o3, xy = TRUE, na.rm = TRUE)
+# 
+# # Clean and standardize the data frame
+# pm2p5 <- as.data.frame(r_sq_pm2p5, xy = TRUE, na.rm = TRUE)
+# pm10 <- as.data.frame(r_sq_pm10, xy = TRUE, na.rm = TRUE)
+# o3 <- as.data.frame(r_sq_o3, xy = TRUE, na.rm = TRUE)
+# 
+# # Merge and organize information
+# dfm <- Reduce(function(x, y) merge(x, y, by = c("x", "y")), list(pm2p5, pm10, o3))
+# dfm <- dfm[order(dfm$y, dfm$x), ]
+# names(dfm) <- c("longitude", "latitude", "pm2p5", "pm10", "ozone")
+# write.csv(dfm, "data/mult-data.csv", row.names = FALSE)
 
 
 ## ----mult-plot, out.width=if(knitr::is_latex_output()) "0.95\\linewidth" else NULL, fig.width=12, fig.height=5, fig.align='center', fig.cap="Mean PM2.5, PM10 and Ozone concentration in Portugal during January 2019. Country boundaries for Portugal and Spain are overlaid for geographic reference.", include=TRUE, echo=TRUE----
@@ -443,8 +448,11 @@ dpdfm_sf$id <- 1:nrow(dpdfm)
 r_crop <- rast("data/eurodemc.tif")
 r_crop[is.na(r_crop)] <- 0
 
+# exactextractr expects Raster* objects
+r_ras <- raster::raster(r_crop)
+
 # Extract elevation values in the original dataset
-map_m$elev <- terra::extract(r_crop, map_m, mean)$eurodem
+map_m$elev <- exact_extract(r_ras, map_m, "mean", progress = FALSE)
 
 # Create the prediction dataset in sf format
 map_pred_m <- st_as_sf(st_make_grid(sq, n = c(length(unique(dfm$longitude)),
@@ -452,7 +460,7 @@ map_pred_m <- st_as_sf(st_make_grid(sq, n = c(length(unique(dfm$longitude)),
 st_crs(map_pred_m) <- "EPSG:4326"
 
 # Extract elevation values in the prediction dataset
-map_pred_m$elev <- terra::extract(r_crop, map_pred_m, mean)$eurodem
+map_pred_m$elev <- exact_extract(r_ras, map_pred_m, "mean", progress = FALSE)
 
 
 ## ----proj-mult, echo=TRUE, eval=TRUE------------------------------------------
@@ -595,8 +603,8 @@ formMult <- y ~ 0 + intercept.y1 + intercept.y2 + intercept.y3 +
 #                           compute = TRUE, link = 1),
 #  control.compute = list(config=TRUE, return.marginals.predictor = TRUE),
 # )
-
-#saveRDS(resM, file = "data/models/mult-model-1.rds")
+# 
+# saveRDS(resM, file = "data/models/mult-model-1.rds")
 resM <- readRDS("data/models/mult-model-1.rds")
 
 # Summary of the fixed effects of the model
@@ -867,8 +875,11 @@ lines(range(tmesh$loc[1:6]), c(0, 0), col = "gray")
 
 ## ----elev-st-plot-2, fig.cap="Elevation over India on the input grid (left) and the prediction grid (right), with country boundaries for reference." , fig.align='center', include=TRUE, echo=TRUE----
 # Time consuming: This code takes 1 minute to be executed
+# exactextractr expects Raster* objects
+r_ras_st <- raster::raster(r_st)
+
 # Extract elevation values in the original dataset
-map_st$elev <- terra::extract(r_st, map_st, mean)$elev
+map_st$elev <- exact_extract(r_ras_st, map_st, "mean", progress = FALSE)
 
 # Create the prediction dataset in sf format
 map_pred_st <- st_as_sf(st_make_grid(sq_st, n = c(length(unique(df_st$longitude)),
@@ -876,7 +887,7 @@ map_pred_st <- st_as_sf(st_make_grid(sq_st, n = c(length(unique(df_st$longitude)
 st_crs(map_pred_st) <- "EPSG:4326"
 
 # Extract elevation values in the prediction dataset
-map_pred_st$elev <- terra::extract(r_st, map_pred_st, mean)$elev
+map_pred_st$elev <- exact_extract(r_ras_st, map_pred_st, "mean", progress = FALSE)
 
 # Covariate in the spatio-temporal setting
 elev_map_st <- rep(map_st$elev/1000, (nt/tf)) #/1000 to convert km to m
@@ -979,7 +990,6 @@ form_st <- y ~ 0  + intercept + elev +f(st, model = stmodel)
 #theta.ini <- c(10.8, 1.96, 7.2, -0.51, 0.83, -0.13) # small
 theta.ini <- c(11.3, 2.06, 7.49, -0.64, 0.61, -0.11) # big
 
-
 # res_st <- inla(form_st, 'gaussian',
 #                data = inla.stack.data(stk.full.st),
 #                control.predictor = list(A = inla.stack.A(stk.full.st),
@@ -989,11 +999,11 @@ theta.ini <- c(11.3, 2.06, 7.49, -0.64, 0.61, -0.11) # big
 #                control.fixed = list(mean=list(intercept=theta.ini[5],
 #                                               elev=theta.ini[6])),
 #                control.compute = list(dic = TRUE, config=TRUE,
-#                                       return.marginals.predictor = TRUE), 
+#                                       return.marginals.predictor = TRUE),
 #                verbose = TRUE)
-#
+# 
 # saveRDS(res_st, file = "data/models/st-model-big.rds")
-res_st <- readRDS("data/models/st-model-big-a.rds")
+res_st <- readRDS("data/models/st-model-big.rds")
 
 # Summary of the fixed effects of the model
 res_st$summary.fixed |>
