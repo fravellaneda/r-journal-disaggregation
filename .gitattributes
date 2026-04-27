@@ -1,2 +1,0 @@
-data/models/mult-model.rds filter=lfs diff=lfs merge=lfs -text
-data/models/st-model-big.rds filter=lfs diff=lfs merge=lfs -text
