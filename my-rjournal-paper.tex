@@ -181,20 +181,25 @@ To download the data, you need to create an account on the Atmospheric Data Stor
 
 After downloading and unzipping the data, we use the \texttt{terra} package to read the \texttt{nc} file. NetCDF (Network Common Data Form) files are widely used for storing multi-dimensional scientific data, such as climate or GIS datasets, because they are self-describing, portable, and efficient for large arrays. The original dataset contains hourly samples for the 31 days of January 2019, totaling 744 observations. Since our focus is on identifying mean trends, we calculated the average PM2.5 concentration for each location. As the original data covers the entire European continent, we cropped the spatial extent to focus specifically on Portugal. To provide better geographical context in our visualizations, we also included the administrative boundaries of Portugal and Spain for clear regional identification using packages \texttt{rnaturalearth} and \texttt{sf}. Finally for plotting we used \texttt{ggplot2}, \texttt{tidyterra} and \texttt{viridis} packages.
 
-To simplify replication and avoid the ADS download and NetCDF preprocessing steps, we provide the preprocessed dataset as \texttt{pm2p5\_portugal.csv}, which contains the processed PM2.5 values in CSV format.
-
 \begin{verbatim}
-# Define the squared study region and convert to dataframe
+# Define the squared study region
 sq <- ext(-9.65, -6.05, 36.85, 42.25)
 
 # Read the dataset and compute mean value (From source)
-# r <- rast("data/cams.eaq.vra.ENSa.pm2p5.l0.2019-01.nc")
-# r_mean <- app(r, mean, na.rm = TRUE)
-# r_sq <- crop(r_mean, sq)
-# df <- as.data.frame(r_sq, xy = TRUE, na.rm = TRUE)
-# df <- df[order(df$y, df$x), ]
-# names(df) <- c("longitude", "latitude", "pm2p5")
-# write.csv(df, "data/pm2p5_portugal.csv", row.names = FALSE)
+r <- rast("data/cams.eaq.vra.ENSa.pm2p5.l0.2019-01.nc")
+r_mean <- app(r, mean, na.rm = TRUE)
+r_sq <- crop(r_mean, sq)
+df <- as.data.frame(r_sq, xy = TRUE, na.rm = TRUE)
+df <- df[order(df$y, df$x), ]
+names(df) <- c("longitude", "latitude", "pm2p5")
+write.csv(df, "data/pm2p5_portugal.csv", row.names = FALSE)
+\end{verbatim}
+
+To simplify replication and avoid the ADS download and NetCDF preprocessing steps, we provide the preprocessed dataset as \texttt{pm2p5\_portugal.csv}, which contains the processed PM2.5 values in CSV format. Figure (\ref{fig:pm25-plot}) shows the spatial distribution of mean PM2.5 over the Portugal for January 2019. Higher concentrations are observed in northern Portugal. The map is provided on the original CAMS grid (about 0.1\(^\circ\), roughly 10 km), which is relatively coarse for local-scale interpretation; we therefore target a finer resolution of 0.02\(^\circ\) (approximately 2 km) using spatial disaggregation.
+
+\begin{verbatim}
+# Define the squared study region
+sq <- ext(-9.65, -6.05, 36.85, 42.25)
 
 # Read dataset from preprocess file
 df <- read.csv("data/pm2p5_portugal.csv")
@@ -227,22 +232,24 @@ ggplot() +
 \caption{Mean PM2.5 concentration in Portugal during January 2019. Country boundaries for Portugal and Spain are overlaid for geographic reference.}\label{fig:pm25-plot}
 \end{figure}
 
-Figure (\ref{fig:pm25-plot}) shows the spatial distribution of mean PM2.5 over the Portugal for January 2019. Higher concentrations are observed in northern Portugal. The map is provided on the original CAMS grid (about 0.1\(^\circ\), roughly 10 km), which is relatively coarse for local-scale interpretation; we therefore target a finer resolution of 0.02\(^\circ\) (approximately 2 km) using spatial disaggregation.
-
 \subsubsection{Covariates}\label{sec:cov}
 
-We incorporate high resolution elevation data, at approximately \(60\)m resolution, from the EuroDEM product maintained by EuroGeographics \citep{eurogeographics2023eurodem} that is available in the following website \url{https://www.mapsforeurope.org/datasets/euro-dem}. Elevation is included as a covariate to relate PM2.5 concentrations with changes in altitude and to improve the explanatory power of the spatial disaggregation model across the study region. This step can be computationally demanding because EuroDEM is provided at very fine resolution and covers all of Europe, and it must be reprojected to EPSG:4326 before cropping. To reduce computation time, we provide a preprocessed version already reprojected, aggregated and cropped to the study region called \texttt{eurodemc.tif}. Figure (\ref{fig:elev-plot-1}) shows the resulting elevation raster over Portugal, with values reported in meters.
+We incorporate high resolution elevation data, at approximately \(60\)m resolution, from the EuroDEM product maintained by EuroGeographics \citep{eurogeographics2023eurodem} that is available in the following website \url{https://www.mapsforeurope.org/datasets/euro-dem}. Elevation is included as a covariate to relate PM2.5 concentrations with changes in altitude and to improve the explanatory power of the spatial disaggregation model across the study region. This step can be computationally demanding because EuroDEM is provided at very fine resolution and covers all of Europe, and it must be reprojected to EPSG:4326 before cropping. To reduce computation time, we provide a preprocessed version already reprojected, aggregated and cropped to the study region called \texttt{eurodemc.tif}.
 
 \begin{verbatim}
-# Time consuming: This preprocessing takes roughly 40 minutes to be executed
-# r <- rast("data/eurodem.tif")
-# r_map <- project(r, "EPSG:4326")
-# writeRaster(r_map, "data/eurodemp.tif", overwrite = TRUE)
-# r_map <- rast("data/eurodemp.tif")
-# r_crop <- crop(r_map, sq_sf)
-# r_ag <- aggregate(r_crop, fact = 2, fun = mean, na.rm = TRUE)
-# writeRaster(r_ag, "data/eurodemc.tif", overwrite = TRUE)
+#Time consuming: This preprocessing takes roughly 40 minutes to be executed
+r <- rast("data/eurodem.tif")
+r_map <- project(r, "EPSG:4326")
+writeRaster(r_map, "data/eurodemp.tif", overwrite = TRUE)
+r_map <- rast("data/eurodemp.tif")
+r_crop <- crop(r_map, sq_sf)
+r_ag <- aggregate(r_crop, fact = 2, fun = mean, na.rm = TRUE)
+writeRaster(r_ag, "data/eurodemc.tif", overwrite = TRUE)
+\end{verbatim}
 
+After preprocessing, Figure (\ref{fig:elev-plot-1}) shows the resulting elevation raster over Portugal, with values reported in meters.
+
+\begin{verbatim}
 # Reading elevation dataset
 r_crop <- rast("data/eurodemc.tif")
 r_crop[is.na(r_crop)] <- 0
@@ -329,7 +336,7 @@ plot(dpdf_sf$geometry, add = TRUE, col = "blue", lwd = 1)
 
 \subsubsection{Elevation covariate on input and prediction grids}\label{elevation-covariate-on-input-and-prediction-grids}
 
-To incorporate this covariate within the disaggregation framework, we align its spatial support with both the original CAMS grid and the high-resolution prediction grid. For this purpose, we use the \texttt{exactextractr} package, which provides efficient tools for extracting and summarizing raster values over polygonal features. We compute the mean elevation within each 0.1\(^\circ\) CAMS input cell and within each 0.02\(^\circ\) prediction cell, so that the covariate is available at the same spatial support as both the observed and predicted quantities. Figure (\citet{ref}(fig:elev-plot-2)) illustrates the resulting elevation covariate over Portugal, with the input grid shown on the left and the prediction grid shown on the right.
+To incorporate this covariate within the disaggregation framework, we align its spatial support with both the original CAMS grid and the high-resolution prediction grid. For this purpose, we use the \texttt{exactextractr} package, which provides efficient tools for extracting and summarizing raster values over polygonal features. We compute the mean elevation within each 0.1\(^\circ\) CAMS input cell and within each 0.02\(^\circ\) prediction cell, so that the covariate is available at the same spatial support as both the observed and predicted quantities. Figure (\ref{fig:elev-plot-2}) illustrates the resulting elevation covariate over Portugal, with the input grid shown on the left and the prediction grid shown on the right.
 
 \begin{verbatim}
 # Time consuming: this part takes around 1 minute to be executed
@@ -471,7 +478,7 @@ res$summary.fixed |>
 \hline
 b0 & 8.345 & 0.022 & 8.303 & 8.345 & 8.387 & 8.345 & 0\\
 \hline
-elev & -0.439 & 0.073 & -0.582 & -0.439 & -0.297 & -0.439 & 0\\
+elev & -0.439 & 0.073 & -0.582 & -0.439 & -0.296 & -0.439 & 0\\
 \hline
 \end{tabular}
 \end{table}
@@ -617,44 +624,45 @@ All other request arguments are kept unchanged from the univariate case describe
 # Define the squared study region and convert to dataframe
 sq <- ext(-9.65, -6.05, 36.85, 42.25)
 
-# # Read the dataset from source
-# 
-# # Read the dataset, compute mean value and crop pm2.5 (From source)
-# r_pm2p5 <- rast("data/cams.eaq.vra.ENSa.pm2p5.l0.2019-01.nc")
-# r_mean_pm2p5 <- app(r_pm2p5, mean, na.rm = TRUE)
-# r_sq_pm2p5 <- crop(r_mean_pm2p5, sq)
-# 
-# # Read the dataset, compute mean value and crop pm10 (From source)
-# r_pm10 <- rast("data/cams.eaq.vra.ENSa.pm10.l0.2019-01.nc")
-# r_mean_pm10 <- app(r_pm10, mean, na.rm = TRUE)
-# r_sq_pm10 <- crop(r_mean_pm10, sq)
-# 
-# # Read the dataset, compute mean and crop Ozone (From source)
-# r_o3 <- rast("data/cams.eaq.vra.ENSa.o3.l0.2019-01.nc")
-# r_mean_o3 <- app(r_o3, mean, na.rm = TRUE)
-# r_sq_o3 <- crop(r_mean_o3, sq)
-# 
-# # Clean and standardize the data frame
-# pm2p5 <- as.data.frame(r_sq_pm2p5, xy = TRUE, na.rm = TRUE)
-# pm10 <- as.data.frame(r_sq_pm10, xy = TRUE, na.rm = TRUE)
-# o3 <- as.data.frame(r_sq_o3, xy = TRUE, na.rm = TRUE)
-# 
-# # Clean and standardize the data frame
-# pm2p5 <- as.data.frame(r_sq_pm2p5, xy = TRUE, na.rm = TRUE)
-# pm10 <- as.data.frame(r_sq_pm10, xy = TRUE, na.rm = TRUE)
-# o3 <- as.data.frame(r_sq_o3, xy = TRUE, na.rm = TRUE)
-# 
-# # Merge and organize information
-# dfm <- Reduce(function(x, y) merge(x, y, by = c("x", "y")), list(pm2p5, pm10, o3))
-# dfm <- dfm[order(dfm$y, dfm$x), ]
-# names(dfm) <- c("longitude", "latitude", "pm2p5", "pm10", "ozone")
-# write.csv(dfm, "data/mult-data.csv", row.names = FALSE)
+# Read the dataset from source
+
+# Read the dataset, compute mean value and crop pm2.5 (From source)
+r_pm2p5 <- rast("data/cams.eaq.vra.ENSa.pm2p5.l0.2019-01.nc")
+r_mean_pm2p5 <- app(r_pm2p5, mean, na.rm = TRUE)
+r_sq_pm2p5 <- crop(r_mean_pm2p5, sq)
+
+# Read the dataset, compute mean value and crop pm10 (From source)
+r_pm10 <- rast("data/cams.eaq.vra.ENSa.pm10.l0.2019-01.nc")
+r_mean_pm10 <- app(r_pm10, mean, na.rm = TRUE)
+r_sq_pm10 <- crop(r_mean_pm10, sq)
+
+# Read the dataset, compute mean and crop Ozone (From source)
+r_o3 <- rast("data/cams.eaq.vra.ENSa.o3.l0.2019-01.nc")
+r_mean_o3 <- app(r_o3, mean, na.rm = TRUE)
+r_sq_o3 <- crop(r_mean_o3, sq)
+
+# Clean and standardize the data frame
+pm2p5 <- as.data.frame(r_sq_pm2p5, xy = TRUE, na.rm = TRUE)
+pm10 <- as.data.frame(r_sq_pm10, xy = TRUE, na.rm = TRUE)
+o3 <- as.data.frame(r_sq_o3, xy = TRUE, na.rm = TRUE)
+
+# Clean and standardize the data frame
+pm2p5 <- as.data.frame(r_sq_pm2p5, xy = TRUE, na.rm = TRUE)
+pm10 <- as.data.frame(r_sq_pm10, xy = TRUE, na.rm = TRUE)
+o3 <- as.data.frame(r_sq_o3, xy = TRUE, na.rm = TRUE)
+
+# Merge and organize information
+dfm <- Reduce(function(x, y) merge(x, y, by = c("x", "y")), list(pm2p5, pm10, o3))
+dfm <- dfm[order(dfm$y, dfm$x), ]
+names(dfm) <- c("longitude", "latitude", "pm2p5", "pm10", "ozone")
+write.csv(dfm, "data/mult-data.csv", row.names = FALSE)
 \end{verbatim}
 
 Figure (\ref{fig:mult-plot}) displays the spatial distribution of mean PM2.5, PM10, and ozone over Portugal for January 2019 on the original CAMS grid (about 0.1\(^\circ\), roughly 10 km), which is relatively coarse for local-scale interpretation. The maps suggest a positive spatial association between PM2.5 and PM10, with areas of higher PM2.5 generally aligning with higher PM10. In contrast, ozone shows an opposite spatial pattern, indicating a negative spatial association with PM2.5 and PM10, where higher particulate concentrations tend to coincide with lower ozone levels.
 
 \begin{verbatim}
 # Read dataset from preprocess file
+sq <- ext(-9.65, -6.05, 36.85, 42.25)
 dfm <- read.csv("data/mult-data.csv")
 
 # Save it as rast files for plotting
@@ -776,7 +784,7 @@ dpdfm_sf$id <- 1:nrow(dpdfm)
 
 \subsubsection{Elevation covariate on input and prediction grids}\label{elevation-covariate-on-input-and-prediction-grids-1}
 
-Similar as the univariate case, in the multivariate setting, elevation is included to explain shared altitude related variability across PM2.5, PM10, and ozone, and to improve the explanatory power of the joint disaggregation model over Portugal. For reproducibility and to reduce computation time, we use the same preprocessed raster \texttt{eurodemc.tif} described in the univariate case, which is already reprojected to EPSG:4326, aggregated, and cropped to the study region.
+Similar as the univariate case, in the multivariate setting, elevation is included to explain shared altitude-related variability across PM2.5, PM10, and ozone, and to improve the explanatory power of the joint disaggregation model over Portugal. For reproducibility and to reduce computation time, we use the same preprocessed raster \texttt{eurodemc.tif} described in the univariate case, which is already reprojected to EPSG:4326, aggregated, and cropped to the study region. As in the spatial case, we use the \texttt{exactextractr} package to extract and summarize the elevation raster over the input grid cells and the prediction locations, ensuring that the covariate is available at the spatial support required by both the observed multivariate data and the prediction grid.
 
 \begin{verbatim}
 # Time consuming: after preprocessing this part takes around 1 minute to be executed
@@ -943,18 +951,22 @@ formMult <- y ~ 0 + intercept.y1 + intercept.y2 + intercept.y3 +
   f(spatial.field.y3, model = spde)
 
 # Fitting and prediction
-# resM <- inla(
-#  formula=formMult,
-#  #verbose = TRUE,
-#  data = inla.stack.data(stk.full.m, spde = spde),
-#  family = rep("gaussian", 3),
-#  control.predictor = list(A = inla.stack.A(stk.full.m),
-#                           compute = TRUE, link = 1),
-#  control.compute = list(config=TRUE, return.marginals.predictor = TRUE),
-# )
-# 
-# saveRDS(resM, file = "data/models/mult-model-1.rds")
-resM <- readRDS("data/models/mult-model-1.rds")
+resM <- inla(
+ formula=formMult,
+ #verbose = TRUE,
+ data = inla.stack.data(stk.full.m, spde = spde),
+ family = rep("gaussian", 3),
+ control.predictor = list(A = inla.stack.A(stk.full.m),
+                          compute = TRUE, link = 1)
+)
+
+saveRDS(resM, file = "data/models/mult-model.rds")
+\end{verbatim}
+
+Table (\ref{tab:tab-fixed-mult-2}) summarizes the posterior distributions of the fixed effects in the multivariate model. The intercepts represent the baseline mean levels at zero elevation, with posterior means of 8.34\textasciitilde{}\(\mu\)g/m\(^3\) for PM2.5, 13.4\textasciitilde{}\(\mu\)g/m\(^3\) for PM10, and 53.48\textasciitilde{}\(\mu\)g/m\(^3\) for ozone. Elevation shows a negative association with particulate matter, since the posterior credible intervals for \texttt{elev.1} and \texttt{elev.2} exclude zero, with posterior means of \(-0.44\) and \(-0.46\), implying decreases of about 0.44 and 0.46\textasciitilde{}\(\mu\)g/m\(^3\) per 1\textasciitilde km increase in altitude for PM2.5 and PM10, respectively. In contrast, ozone shows a positive association with elevation, with a posterior mean of 3.36 and a credible interval that also excludes zero, indicating an increase of about 3.36\textasciitilde{}\(\mu\)g/m\(^3\) per 1\textasciitilde km increase in altitude.
+
+\begin{verbatim}
+resM <- readRDS("data/models/mult-model.rds")
 
 # Summary of the fixed effects of the model
 resM$summary.fixed |>
@@ -964,7 +976,7 @@ resM$summary.fixed |>
 
 \begin{table}
 \centering
-\caption{\label{tab:tab-fixed-mult}Posterior summary of the fixed effects (intercept and elevation coefficient) for the multivariate model of PM2.5, PM10 and Ozone concentrations in Portugal.}
+\caption{\label{tab:tab-fixed-mult-2}Posterior summary of the fixed effects (intercept and elevation coefficient) for the multivariate model of PM2.5, PM10 and Ozone concentrations in Portugal.}
 \centering
 \begin{tabular}[t]{l|r|r|r|r|r|r|r}
 \hline
@@ -972,20 +984,18 @@ resM$summary.fixed |>
 \hline
 intercept.y1 & 8.345 & 0.022 & 8.302 & 8.345 & 8.387 & 8.345 & 0\\
 \hline
-intercept.y2 & 13.400 & 0.027 & 13.347 & 13.400 & 13.452 & 13.400 & 0\\
+intercept.y2 & 13.399 & 0.027 & 13.347 & 13.399 & 13.451 & 13.399 & 0\\
 \hline
-intercept.y3 & 53.478 & 0.056 & 53.368 & 53.478 & 53.587 & 53.478 & 0\\
+intercept.y3 & 53.480 & 0.056 & 53.371 & 53.480 & 53.589 & 53.480 & 0\\
 \hline
 elev.1 & -0.438 & 0.073 & -0.581 & -0.438 & -0.295 & -0.438 & 0\\
 \hline
-elev.2 & -0.457 & 0.090 & -0.633 & -0.457 & -0.280 & -0.457 & 0\\
+elev.2 & -0.455 & 0.090 & -0.631 & -0.455 & -0.279 & -0.455 & 0\\
 \hline
-elev.3 & 3.365 & 0.188 & 2.996 & 3.365 & 3.734 & 3.365 & 0\\
+elev.3 & 3.356 & 0.187 & 2.989 & 3.356 & 3.724 & 3.356 & 0\\
 \hline
 \end{tabular}
 \end{table}
-
-Table (\ref{tab:tab-fixed-mult}) summarizes the posterior distributions of the fixed effects in the multivariate model. The intercepts represent the baseline mean levels at zero elevation, with posterior means of 8.34\textasciitilde{}\(\mu\)g/m\(^3\) for PM2.5, 13.4\textasciitilde{}\(\mu\)g/m\(^3\) for PM10, and 53.48\textasciitilde{}\(\mu\)g/m\(^3\) for ozone. Elevation shows a negative association with particulate matter, since the posterior credible intervals for \texttt{elev.1} and \texttt{elev.2} exclude zero, with posterior means of \(-0.44\) and \(-0.46\), implying decreases of about 0.44 and 0.46\textasciitilde{}\(\mu\)g/m\(^3\) per 1\textasciitilde km increase in altitude for PM2.5 and PM10, respectively. In contrast, ozone shows a positive association with elevation, with a posterior mean of 3.36 and a credible interval that also excludes zero, indicating an increase of about 3.36\textasciitilde{}\(\mu\)g/m\(^3\) per 1\textasciitilde km increase in altitude.
 
 \subsubsection{Input data and disaggregated multivariate predictions}\label{input-data-and-disaggregated-multivariate-predictions}
 
@@ -1294,19 +1304,21 @@ We incorporate elevation as a covariate using the SRTM30\(+\) Version \(11\) lan
 
 \begin{verbatim}
 # Time consuming: This code takes 1 minute to be executed
-# Dowloading the elevation for India
-# url <- paste0(
-#   "https://pae-paha.pacioos.hawaii.edu/erddap/griddap/",
-#   "srtm30plus_v11_land.nc?",
-#   "elev[(", sq_st$ymin-1, "):1:(", sq_st$ymax+1, ")]",
-#   "[(", sq_st$xmin-1, "):1:(", sq_st$xmax+1, ")]"
-# )
-# curl_download(
-#   url,
-#   destfile = "data/srtm30plus_india.nc",
-#   mode = "wb"
-# )
+# Downloading the elevation for India
+url <- paste0(
+  "https://pae-paha.pacioos.hawaii.edu/erddap/griddap/",
+  "srtm30plus_v11_land.nc?",
+  "elev[(", sq_st$ymin-1, "):1:(", sq_st$ymax+1, ")]",
+  "[(", sq_st$xmin-1, "):1:(", sq_st$xmax+1, ")]"
+)
+curl_download(
+  url,
+  destfile = "data/srtm30plus_india.nc",
+  mode = "wb"
+)
+\end{verbatim}
 
+\begin{verbatim}
 # Read the .nc file
 r_st <- rast("data/srtm30plus_india.nc")
 r_st[is.na(r_st)] <- 0
@@ -1417,7 +1429,7 @@ lines(range(tmesh$loc[1:6]), c(0, 0), col = "gray")
 
 \subsection{Elevation covariate on input and prediction grids}\label{elevation-covariate-on-input-and-prediction-grids-2}
 
-To use elevation within our spatio-temporal disaggregation framework, we align its support with both the original AOD grid and the finer prediction grid by extracting mean elevation values for the input cells at \(0.75^\circ\) resolution and for the prediction locations at \(0.25^\circ\) resolution. Figure (\ref{fig:elev-st-plot-2}) illustrates elevation over India on the input grid, shown on the left, and on the prediction grid, shown on the right, with country boundaries for reference.
+To use elevation within our spatio-temporal disaggregation framework, we align its support with both the original AOD grid and the finer prediction grid. As in the spatial case, we use the \texttt{exactextractr} package to extract and summarize raster values over the input grid cells and the prediction locations. Specifically, we compute mean elevation values for the input cells at \(0.75^\circ\) resolution and for the prediction locations at \(0.25^\circ\) resolution, ensuring that the covariate is available at the spatial support required by both the observed spatio-temporal data and the prediction grid. Figure (\ref{fig:elev-st-plot-2}) illustrates elevation over India on the input grid, shown on the left, and on the prediction grid, shown on the right, with country boundaries for reference.
 
 \begin{verbatim}
 # Time consuming: This code takes 1 minute to be executed
@@ -1562,24 +1574,33 @@ To fit the spatio temporal disaggregation model in Equation \eqref{eq:app-aod}, 
 Since this model can take a long time to fit, especially for the larger spatial domain, we use a practical strategy based on \texttt{theta.ini}. Here \texttt{theta.ini} provides initial values for the latent field hyperparameters and the fixed effects, and we pass them through \texttt{control.mode} and \texttt{control.fixed}. In practice, giving reasonable initial values helps the optimizer converge faster and reduces total runtime. In our experiments, fitting the model without \texttt{theta.ini} took about \(6\) h \(19\) min for the big region and about \(2\) h for the small region. Using \texttt{theta.ini} reduced the runtime to about \(1\) h \(19\) min for the big region and about \(27\) min for the small region. We provide two sets of starting values, one for the smaller domain and one for the larger domain, and you can switch between them by selecting the corresponding \texttt{theta.ini} line in the code.
 
 \begin{verbatim}
+# Time consuming: approximately 1 h 19 min for the full region
+# and 27 min for the smaller region. See the paragraph above for more details.
+
+# Formula in INLA
 form_st <- y ~ 0  + intercept + elev +f(st, model = stmodel)
 
 #theta.ini <- c(10.8, 1.96, 7.2, -0.51, 0.83, -0.13) # small
 theta.ini <- c(11.3, 2.06, 7.49, -0.64, 0.61, -0.11) # big
 
-# res_st <- inla(form_st, 'gaussian',
-#                data = inla.stack.data(stk.full.st),
-#                control.predictor = list(A = inla.stack.A(stk.full.st),
-#                                         compute = TRUE, link=1),
-#                control.inla = list(int.strategy = 'eb'),
-#                control.mode = list(theta = theta.ini[1:4], restart = TRUE),
-#                control.fixed = list(mean=list(intercept=theta.ini[5],
-#                                               elev=theta.ini[6])),
-#                control.compute = list(dic = TRUE, config=TRUE,
-#                                       return.marginals.predictor = TRUE),
-#                verbose = TRUE)
-# 
-# saveRDS(res_st, file = "data/models/st-model-big.rds")
+res_st <- inla(form_st, 'gaussian',
+               data = inla.stack.data(stk.full.st),
+               control.predictor = list(A = inla.stack.A(stk.full.st),
+                                        compute = TRUE, link=1),
+               control.inla = list(int.strategy = 'eb'),
+               control.mode = list(theta = theta.ini[1:4], restart = TRUE),
+               control.fixed = list(mean=list(intercept=theta.ini[5],
+                                              elev=theta.ini[6])),
+               control.compute = list(dic = TRUE, config=TRUE,
+                                      return.marginals.predictor = TRUE),
+               verbose = TRUE)
+
+saveRDS(res_st, file = "data/models/st-model-big.rds")
+\end{verbatim}
+
+Table (\ref{tab:tab-fixed-st-2}) summarizes the posterior distributions of the fixed effects in the spatio-temporal model. AOD is a unitless measure related to aerosol load in the atmosphere. The posterior mean of the intercept is 0.61, which can be interpreted as the baseline mean AOD at zero elevation. Elevation shows a negative association with AOD, with a posterior mean of \(-0.11\) and a credible interval that excludes zero, implying a decrease of about 0.11 in AOD per 1\textasciitilde km increase in altitude.
+
+\begin{verbatim}
 res_st <- readRDS("data/models/st-model-big.rds")
 
 # Summary of the fixed effects of the model
@@ -1590,7 +1611,7 @@ res_st$summary.fixed |>
 
 \begin{table}
 \centering
-\caption{\label{tab:tab-fixed-st}Posterior summary of the fixed effects (intercept and elevation) for the spatio-temporal model of AOD at 550nm in India.}
+\caption{\label{tab:tab-fixed-st-2}Posterior summary of the fixed effects (intercept and elevation) for the spatio-temporal model of AOD at 550nm in India.}
 \centering
 \begin{tabular}[t]{l|r|r|r|r|r|r|r}
 \hline
@@ -1602,8 +1623,6 @@ elev & -0.115 & 0.014 & -0.143 & -0.115 & -0.087 & -0.115 & 0\\
 \hline
 \end{tabular}
 \end{table}
-
-Table (\ref{tab:tab-fixed-st}) summarizes the posterior distributions of the fixed effects in the spatio-temporal model. AOD is a unitless measure related to aerosol load in the atmosphere. The posterior mean of the intercept is 0.61, which can be interpreted as the baseline mean AOD at zero elevation. Elevation shows a negative association with AOD, with a posterior mean of \(-0.11\) and a credible interval that excludes zero, implying a decrease of about 0.11 in AOD per 1\textasciitilde km increase in altitude.
 
 \subsubsection{Input data and disaggregated spatio-temporal predictions}\label{input-data-and-disaggregated-spatio-temporal-predictions}
 

@@ -32,7 +32,7 @@ pkg <- function(x) {
 knitr::include_graphics("images/mesh.jpg")
 
 
-## ----inla-install, eval=FALSE, echo=TRUE--------------------------------------
+## ----inla-install, eval=FALSE, echo=TRUE, include=TRUE------------------------
 # # Install INLA from the INLA repository (not CRAN)
 # install.packages(
 #   "INLA",
@@ -48,11 +48,11 @@ knitr::include_graphics("images/mesh.jpg")
 # inla.version()
 
 
-## ----pm25-plot,fig.align='center', fig.cap="Mean PM2.5 concentration in Portugal during January 2019. Country boundaries for Portugal and Spain are overlaid for geographic reference.", include=TRUE, echo=TRUE----
-# Define the squared study region and convert to dataframe
-sq <- ext(-9.65, -6.05, 36.85, 42.25)
-
-# Read the dataset and compute mean value (From source)
+## ----pm25-trans, eval=FALSE, echo=TRUE, include=TRUE--------------------------
+# # Define the squared study region
+# sq <- ext(-9.65, -6.05, 36.85, 42.25)
+# 
+# # Read the dataset and compute mean value (From source)
 # r <- rast("data/cams.eaq.vra.ENSa.pm2p5.l0.2019-01.nc")
 # r_mean <- app(r, mean, na.rm = TRUE)
 # r_sq <- crop(r_mean, sq)
@@ -60,6 +60,11 @@ sq <- ext(-9.65, -6.05, 36.85, 42.25)
 # df <- df[order(df$y, df$x), ]
 # names(df) <- c("longitude", "latitude", "pm2p5")
 # write.csv(df, "data/pm2p5_portugal.csv", row.names = FALSE)
+
+
+## ----pm25-plot,fig.align='center', fig.cap="Mean PM2.5 concentration in Portugal during January 2019. Country boundaries for Portugal and Spain are overlaid for geographic reference.", include=TRUE, echo=TRUE----
+# Define the squared study region
+sq <- ext(-9.65, -6.05, 36.85, 42.25)
 
 # Read dataset from preprocess file
 df <- read.csv("data/pm2p5_portugal.csv")
@@ -83,8 +88,8 @@ ggplot() +
            expand = FALSE)
 
 
-## ----elev-plot-1, fig.cap="EuroDEM elevation raster over Portugal (meters), cropped to the study region and used as a covariate in the disaggregation model.", fig.align='center', include=TRUE, echo=TRUE----
-# Time consuming: This preprocessing takes roughly 40 minutes to be executed
+## ----elev-plot-t, eval=FALSE, echo=TRUE, include=TRUE-------------------------
+# #Time consuming: This preprocessing takes roughly 40 minutes to be executed
 # r <- rast("data/eurodem.tif")
 # r_map <- project(r, "EPSG:4326")
 # writeRaster(r_map, "data/eurodemp.tif", overwrite = TRUE)
@@ -93,6 +98,8 @@ ggplot() +
 # r_ag <- aggregate(r_crop, fact = 2, fun = mean, na.rm = TRUE)
 # writeRaster(r_ag, "data/eurodemc.tif", overwrite = TRUE)
 
+
+## ----elev-plot-1, fig.cap="EuroDEM elevation raster over Portugal (meters), cropped to the study region and used as a covariate in the disaggregation model.", fig.align='center', include=TRUE, echo=TRUE----
 # Reading elevation dataset
 r_crop <- rast("data/eurodemc.tif")
 r_crop[is.na(r_crop)] <- 0
@@ -303,10 +310,10 @@ p2 <- ggplot(map_pred) +
 p1 + p2
 
 
-## ----mult-input, include=TRUE, echo=TRUE--------------------------------------
-# Define the squared study region and convert to dataframe
-sq <- ext(-9.65, -6.05, 36.85, 42.25)
-
+## ----mult-input, eval=FALSE, echo=TRUE, include=TRUE--------------------------
+# # Define the squared study region and convert to dataframe
+# sq <- ext(-9.65, -6.05, 36.85, 42.25)
+# 
 # # Read the dataset from source
 # 
 # # Read the dataset, compute mean value and crop pm2.5 (From source)
@@ -343,6 +350,7 @@ sq <- ext(-9.65, -6.05, 36.85, 42.25)
 
 ## ----mult-plot, out.width=if(knitr::is_latex_output()) "0.95\\linewidth" else NULL, fig.width=12, fig.height=5, fig.align='center', fig.cap="Mean PM2.5, PM10 and Ozone concentration in Portugal during January 2019. Country boundaries for Portugal and Spain are overlaid for geographic reference.", include=TRUE, echo=TRUE----
 # Read dataset from preprocess file
+sq <- ext(-9.65, -6.05, 36.85, 42.25)
 dfm <- read.csv("data/mult-data.csv")
 
 # Save it as rast files for plotting
@@ -579,33 +587,35 @@ stk.pred.m <- inla.stack(stk.y1.pred, stk.y2.pred, stk.y3.pred)
 stk.full.m <- inla.stack(stk.est.m, stk.pred.m)
 
 
-## ----tab-fixed-mult, tab.cap="Posterior summary of the fixed effects (intercept and elevation coefficient) for the multivariate model of PM2.5, PM10 and Ozone concentrations in Portugal.", echo=TRUE, eval=TRUE----
-# Time consuming: This code can  take around 40 minutes to run.
-# To monitor progress, uncomment the line `verbose = TRUE` in the `inla()` call.
-
-# INLA formula
-formMult <- y ~ 0 + intercept.y1 + intercept.y2 + intercept.y3 +
-  elev.1 + elev.2 + elev.3 +
-  f(spatial.field.sh, model = spde) +
-  f(sh.copy.y2, copy = "spatial.field.sh", fixed = FALSE) +
-  f(spatial.field.y2, model = spde) +
-  f(sh.copy.y3, copy = "spatial.field.sh", fixed = FALSE) +
-  f(y2.copy.y3, copy = "spatial.field.y2", fixed = FALSE) +
-  f(spatial.field.y3, model = spde)
-
-# Fitting and prediction
+## ----tab-fixed-mult-1, eval=FALSE, echo=TRUE, include=TRUE--------------------
+# # Time consuming: This code can  take around 40 minutes to run.
+# # To monitor progress, uncomment the line `verbose = TRUE` in the `inla()` call.
+# 
+# # INLA formula
+# formMult <- y ~ 0 + intercept.y1 + intercept.y2 + intercept.y3 +
+#   elev.1 + elev.2 + elev.3 +
+#   f(spatial.field.sh, model = spde) +
+#   f(sh.copy.y2, copy = "spatial.field.sh", fixed = FALSE) +
+#   f(spatial.field.y2, model = spde) +
+#   f(sh.copy.y3, copy = "spatial.field.sh", fixed = FALSE) +
+#   f(y2.copy.y3, copy = "spatial.field.y2", fixed = FALSE) +
+#   f(spatial.field.y3, model = spde)
+# 
+# # Fitting and prediction
 # resM <- inla(
 #  formula=formMult,
 #  #verbose = TRUE,
 #  data = inla.stack.data(stk.full.m, spde = spde),
 #  family = rep("gaussian", 3),
 #  control.predictor = list(A = inla.stack.A(stk.full.m),
-#                           compute = TRUE, link = 1),
-#  control.compute = list(config=TRUE, return.marginals.predictor = TRUE),
+#                           compute = TRUE, link = 1)
 # )
 # 
-# saveRDS(resM, file = "data/models/mult-model-1.rds")
-resM <- readRDS("data/models/mult-model-1.rds")
+# saveRDS(resM, file = "data/models/mult-model.rds")
+
+
+## ----tab-fixed-mult-2, tab.cap="Posterior summary of the fixed effects (intercept and elevation coefficient) for the multivariate model of PM2.5, PM10 and Ozone concentrations in Portugal.", echo=TRUE, eval=TRUE----
+resM <- readRDS("data/models/mult-model.rds")
 
 # Summary of the fixed effects of the model
 resM$summary.fixed |>
@@ -776,9 +786,9 @@ ggplot(df_st, aes(x = longitude, y = latitude, fill = value)) +
 
 
 
-## ----elev-st-plot-1, fig.cap="Elevation over India (meters) from the SRTM30$+$ v11 DEM, cropped to the study region and used as a covariate in the spatio-temporal AOD model." , fig.align='center', include=TRUE, echo=TRUE----
-# Time consuming: This code takes 1 minute to be executed
-# Dowloading the elevation for India
+## ----elev-st-download, eval=FALSE, echo=TRUE, include=TRUE--------------------
+# # Time consuming: This code takes 1 minute to be executed
+# # Downloading the elevation for India
 # url <- paste0(
 #   "https://pae-paha.pacioos.hawaii.edu/erddap/griddap/",
 #   "srtm30plus_v11_land.nc?",
@@ -791,6 +801,8 @@ ggplot(df_st, aes(x = longitude, y = latitude, fill = value)) +
 #   mode = "wb"
 # )
 
+
+## ----elev-st-plot-1, fig.cap="Elevation over India (meters) from the SRTM30$+$ v11 DEM, cropped to the study region and used as a covariate in the spatio-temporal AOD model." , fig.align='center', include=TRUE, echo=TRUE----
 # Read the .nc file
 r_st <- rast("data/srtm30plus_india.nc")
 r_st[is.na(r_st)] <- 0
@@ -984,12 +996,16 @@ stk.pred.st <- inla.stack(
 stk.full.st <- inla.stack(stk.est.st, stk.pred.st)
 
 
-## ----tab-fixed-st, tab.cap="Posterior summary of the fixed effects (intercept and elevation) for the spatio-temporal model of AOD at 550nm in India.", include=TRUE, echo=TRUE----
-form_st <- y ~ 0  + intercept + elev +f(st, model = stmodel)
-
-#theta.ini <- c(10.8, 1.96, 7.2, -0.51, 0.83, -0.13) # small
-theta.ini <- c(11.3, 2.06, 7.49, -0.64, 0.61, -0.11) # big
-
+## ----tab-fixed-st-1, eval=FALSE, echo=TRUE, include=TRUE----------------------
+# # Time consuming: approximately 1 h 19 min for the full region
+# # and 27 min for the smaller region. See the paragraph above for more details.
+# 
+# # Formula in INLA
+# form_st <- y ~ 0  + intercept + elev +f(st, model = stmodel)
+# 
+# #theta.ini <- c(10.8, 1.96, 7.2, -0.51, 0.83, -0.13) # small
+# theta.ini <- c(11.3, 2.06, 7.49, -0.64, 0.61, -0.11) # big
+# 
 # res_st <- inla(form_st, 'gaussian',
 #                data = inla.stack.data(stk.full.st),
 #                control.predictor = list(A = inla.stack.A(stk.full.st),
@@ -1003,6 +1019,9 @@ theta.ini <- c(11.3, 2.06, 7.49, -0.64, 0.61, -0.11) # big
 #                verbose = TRUE)
 # 
 # saveRDS(res_st, file = "data/models/st-model-big.rds")
+
+
+## ----tab-fixed-st-2, tab.cap="Posterior summary of the fixed effects (intercept and elevation) for the spatio-temporal model of AOD at 550nm in India.", include=TRUE, echo=TRUE----
 res_st <- readRDS("data/models/st-model-big.rds")
 
 # Summary of the fixed effects of the model
