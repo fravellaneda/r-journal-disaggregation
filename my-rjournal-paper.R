@@ -26,8 +26,103 @@ pkg <- function(x) {
 #knitr::write_bib(c(.packages()), "packages.bib",prefix = getOption("knitr.bib.prefix", "R-"))
 
 
-## ----mesh-example, fig.cap="Example of a rectangular region $R_i$ overlaid on a triangulated mesh, where the green vertices are the mesh nodes inside $R_i$ and are used to define the projection matrix A.", fig.align="center", out.width="60%", fig.align="center"----
-knitr::include_graphics("images/mesh.jpg")
+
+## ----weights-example, fig.cap="Example of a region $R_i$ given by one input cell, shown in UTM coordinates and overlaid on a triangulated mesh, with one mesh node $k$ marked by a white circle. (a) Contribution of one grid point (blue) to the three nodes of its triangle, with the contribution to node $k$ in bold. (b) Contributions of the 400 grid points to node $k$, with zero contributions in grey. Their average is the weight $A_{ik} \\approx 0.207$.", fig.alt="Two panels of the same red region over a dark grey triangular mesh, in UTM coordinates, with one mesh node marked by a white circle. In panel (a), a blue grid point lies in a blue shaded triangle whose corners are labelled 0.49, 0.22 and 0.29, with 0.49 at the marked node in bold. In panel (b), the grid points are coloured from dark purple to yellow by their contribution to the marked node, highest near the node and grey where the contribution is zero, and the marked node is labelled 0.207 in bold.", fig.align="center", out.width="100%", fig.width=8, fig.height=3.9----
+local({
+  # Input grid and mesh
+  sq <- ext(-9.65, -6.05, 36.85, 42.25)
+  df <- read.csv("data/pm2p5_portugal.csv")
+  map <- st_as_sf(st_make_grid(sq, n = c(length(unique(df$longitude)),
+                                         length(unique(df$latitude)))))
+  st_geometry(map) <- "geometry"
+  st_crs(map) <- "EPSG:4326"
+  crs_km <- fm_crs("+proj=utm +zone=29 +datum=WGS84 +units=km +no_defs")
+  inner <- st_buffer(st_union(st_transform(map, crs_km)), 10)
+  hexpts <- fm_hexagon_lattice(bnd = inner, edge_len = 5)
+  mesh <- fm_mesh_2d(
+    loc = hexpts,
+    boundary = fm_extensions(inner, convex = c(10, 150), concave = c(10, 150),
+                             resolution = c(100, 170)),
+    max.edge = c(10, 50),
+    crs = crs_km
+  )
+
+  # Mesh nodes and edges
+  nodes <- data.frame(x = mesh$loc[, 1], y = mesh$loc[, 2])
+  tv <- mesh$graph$tv
+  edges <- unique(t(apply(rbind(tv[, 1:2], tv[, 2:3], tv[, c(3, 1)]), 1, sort)))
+  edges <- data.frame(x = nodes$x[edges[, 1]], y = nodes$y[edges[, 1]],
+                      xend = nodes$x[edges[, 2]], yend = nodes$y[edges[, 2]])
+
+  # Choose a central cell
+  ctr <- st_coordinates(st_centroid(st_geometry(map)))
+  i <- which.min((ctr[, 1] + 7.8)^2 + (ctr[, 2] - 39.5)^2)
+  bb <- st_bbox(map[i, ])
+  cell <- as.data.frame(st_coordinates(st_transform(map[i, ], crs_km))[, 1:2])
+  pad <- 3.5
+
+  # Grid of points in the cell
+  m <- 20
+  dx <- (bb[["xmax"]] - bb[["xmin"]]) / m
+  dy <- (bb[["ymax"]] - bb[["ymin"]]) / m
+  pts <- expand.grid(x = bb[["xmin"]] + dx * (seq_len(m) - 0.5),
+                     y = bb[["ymin"]] + dy * (seq_len(m) - 0.5))
+  pts <- st_as_sf(pts, coords = c("x", "y"), crs = "EPSG:4326")
+  pts <- as.data.frame(st_coordinates(st_transform(pts, crs_km)))
+  A <- inla.spde.make.A(mesh, loc = as.matrix(pts))
+  w <- Matrix::colMeans(A)
+
+  # Node with the largest weight, and its value at each point
+  k <- which.max(w)
+  pts$a <- as.numeric(A[, k])
+
+  # A point in a triangle of that node, with a clear value on all three corners
+  cand <- which(pts$a > 0.45 & pts$a < 0.6)
+  j <- cand[which.max(sapply(cand, function(p) min(A[p, A[p, ] > 0])))]
+  ii <- which(A[j, ] > 0)
+  tri <- nodes[ii, ]
+  tri$lab <- sprintf("%.2f", A[j, ii])
+  tri$isk <- ii == k
+  cx <- mean(tri$x)
+  cy <- mean(tri$y)
+  tri$lx <- tri$x + 0.75 * sign(tri$x - cx) * (abs(tri$x - cx) > 0.5)
+  tri$ly <- tri$y + 0.75 * sign(tri$y - cy)
+  tri$lx <- pmin(tri$lx, max(cell$X) + pad - 1.2)
+  tri$lx[tri$y < cy] <- tri$x[tri$y < cy] + 0.8
+
+  base <- function(p) {
+    p +
+      geom_segment(data = edges, aes(x = x, y = y, xend = xend, yend = yend),
+                   colour = "grey30", linewidth = 0.3) +
+      geom_polygon(data = cell, aes(X, Y), fill = NA, colour = "red", linewidth = 0.8) +
+      annotate("text", x = min(cell$X) + 1, y = max(cell$Y) + 1,
+               label = "R[i]", parse = TRUE, colour = "red", size = 5) +
+      coord_equal(xlim = range(cell$X) + c(-pad, pad),
+                  ylim = range(cell$Y) + c(-pad, pad), expand = FALSE) +
+      labs(x = NULL, y = NULL) +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 9))
+  }
+  node_k <- geom_point(data = nodes[k, ], aes(x, y), colour = "black", fill = "white",
+                       shape = 21, size = 3, stroke = 0.8)
+
+  p1 <- base(ggplot() +
+    geom_polygon(data = tri, aes(x, y), fill = "blue", alpha = 0.15)) +
+    geom_point(data = pts, aes(X, Y), colour = "black", size = 0.15) +
+    geom_point(data = pts[j, ], aes(X, Y), colour = "blue", size = 1.8) +
+    node_k +
+    geom_label(data = tri, aes(lx, ly, label = lab,
+                               fontface = ifelse(isk, "bold", "plain")), size = 3)
+
+  p2 <- base(ggplot()) +
+    geom_point(data = pts[pts$a == 0, ], aes(X, Y), colour = "grey60", size = 0.15) +
+    geom_point(data = pts[pts$a > 0, ], aes(X, Y, colour = a), size = 0.8) +
+    scale_colour_viridis_c(name = "Contribution", limits = c(0, 1)) +
+    node_k +
+    geom_label(data = tri[tri$isk, ], aes(lx, ly), label = sprintf("%.3f", w[k]),
+               size = 3, fontface = "bold")
+
+  p1 + p2 + plot_annotation(tag_levels = "a", tag_prefix = "(", tag_suffix = ")")
+})
 
 
 ## ----inla-install, eval=FALSE, echo=TRUE, include=TRUE------------------------
@@ -57,7 +152,7 @@ knitr::include_graphics("images/mesh.jpg")
 # write.csv(df, "data/pm2p5_portugal.csv", row.names = FALSE)
 
 
-## ----pm25-plot,fig.align='center', fig.cap="Mean PM2.5 concentration in Portugal during January 2019. Country boundaries for Portugal and Spain are overlaid for geographic reference.", include=TRUE, echo=TRUE----
+## ----pm25-plot, dev="png", dpi=if (knitr::is_latex_output()) 300 else 96,fig.align='center', fig.cap="Mean PM2.5 concentration in Portugal during January 2019. Country boundaries for Portugal and Spain are overlaid for geographic reference.", fig.alt="Map of mean PM2.5 over Portugal on the 0.1 degree CAMS grid, coloured from dark purple (about 4) to yellow (about 20), with the borders of Portugal and Spain in red. The highest values form a band along the west coast, around Lisbon near 38.7 degrees north and around Porto near 41 degrees north, while most of the interior has low values.", include=TRUE, echo=TRUE----
 # Define the squared study region
 sq <- ext(-9.65, -6.05, 36.85, 42.25)
 
@@ -73,7 +168,7 @@ boundary <- ne_countries(scale="medium", returnclass="sf") |>
 # Plot PM2.5 contamination and boundary countries
 ggplot() +
   geom_spatraster(data = r_sq) +
-  geom_sf(data = boundary, fill = NA, color = "black") +
+  geom_sf(data = boundary, fill = NA, color = "red") +
   scale_fill_viridis_c(name = "PM2.5") +
   theme(
     axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 9)
@@ -84,83 +179,95 @@ ggplot() +
 
 
 ## ----elev-plot-t, eval=FALSE, echo=TRUE, include=TRUE-------------------------
-# # Time consuming: This preprocessing takes roughly 40 minutes to be executed
 # r <- rast("data/eurodem.tif")
-# r_map <- project(r, "EPSG:4326")
-# writeRaster(r_map, "data/eurodemp.tif", overwrite = TRUE)
-# r_map <- rast("data/eurodemp.tif")
-# r_crop <- crop(r_map, sq_sf)
-# r_ag <- aggregate(r_crop, fact = 2, fun = mean, na.rm = TRUE)
-# writeRaster(r_ag, "data/eurodemc.tif", overwrite = TRUE)
+# # The coordinates of this file are stored in arc-seconds
+# r_sub <- crop(r, ext(as.vector(extend(sq, 0.07)) * 3600))
+# ext(r_sub) <- as.vector(ext(r_sub)) / 3600
+# crs(r_sub) <- "EPSG:4326"
+# # Keep a margin of 0.05 degrees around the study region
+# target <- rast(extend(sq, 0.05), res = 5 / 3600, crs = "EPSG:4326")
+# r_map <- project(r_sub, target, method = "bilinear")
+# r_ag <- aggregate(r_map, fact = 2, fun = "mean", na.rm = TRUE)
+# r_ag <- round(r_ag, 1)
+# names(r_ag) <- "eurodem"
+# writeRaster(r_ag, "data/eurodemc.tif", overwrite = TRUE, datatype = "FLT4S",
+#             gdal = "COMPRESS=LZW")
 
 
-## ----elev-plot-1, fig.cap="EuroDEM elevation raster over Portugal (meters), cropped to the study region and used as a covariate in the disaggregation model.", fig.align='center', include=TRUE, echo=TRUE----
+## ----elev-plot-1, dev="png", dpi=if (knitr::is_latex_output()) 300 else 96, fig.cap="EuroDEM elevation raster over Portugal (meters), cropped to the study region and used as a covariate in the disaggregation model.", fig.alt="Fine resolution elevation map of Portugal, coloured from dark purple (0 metres) to yellow (about 2000 metres), with the borders of Portugal and Spain in red. The sea and the coast are low, the north and north-east are mountainous with the highest values near 40.3 degrees north and along the northern border, and river valleys appear as dark lines.", fig.align='center', include=TRUE, echo=TRUE----
 # Reading elevation dataset
 r_crop <- rast("data/eurodemc.tif")
 r_crop[is.na(r_crop)] <- 0
 
-plot(r_crop)
+ggplot() +
+  geom_spatraster(data = r_crop) +
+  geom_sf(data = boundary, fill = NA, color = "red") +
+  scale_fill_viridis_c(name = "Elevation (m)") +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 9)
+  ) +
+  coord_sf(xlim = c(xmin(sq), xmax(sq)),
+           ylim = c(ymin(sq), ymax(sq)),
+           expand = FALSE)
 
 
-## ----mesh-plot, fig.cap="Spatial discretization for disaggregation. Original grid support is shown in red. Prediction points for `spf=5` are shown in blue (left), and a portion of the triangulated mesh is shown in black (right)", fig.align='center', include=TRUE, echo=TRUE----
+## ----mesh-plot, dev="png", dpi=if (knitr::is_latex_output()) 300 else 96, fig.cap="Spatial discretization for disaggregation. Original grid support is shown in red. A portion of the triangulated mesh is shown in black (left), and prediction points for `spf=5` are shown in blue (right).", fig.alt="Two panels of the same corner of the study region. On the left, red square input cells are overlaid on a grey mesh of nearly equilateral triangles, with several triangles across each cell. On the right, the same red cells each contain a regular 5 by 5 grid of blue prediction points.", fig.align='center', include=TRUE, echo=TRUE----
 # Initial squared grid
 map <- st_as_sf(st_make_grid(sq, n = c(length(unique(df$longitude)),
                                length(unique(df$latitude)))))
 st_geometry(map) <- "geometry"
 st_crs(map) <- "EPSG:4326"
 
-# Spatial mesh
-sq_sf <- st_as_sf(as.polygons(sq))
+# Spatial mesh in UTM zone 29N, in kilometres
+crs_km <- fm_crs("+proj=utm +zone=29 +datum=WGS84 +units=km +no_defs")
+map_km <- st_transform(map, crs_km)
+inner <- st_buffer(st_union(map_km), 10)
 
 hexpts <- fm_hexagon_lattice(
-  bnd = st_buffer(sq_sf, 0.1),
-  edge_len = 0.05
+  bnd = inner,
+  edge_len = 5
 )
 
 mesh <- fm_mesh_2d(
   loc = hexpts,
-  max.edge = 0.1,
-  offset = 0.05
+  boundary = fm_extensions(inner, convex = c(10, 150), concave = c(10, 150),
+                           resolution = c(100, 170)),
+  max.edge = c(10, 50),
+  crs = crs_km
 )
 
 # prediction points
 
 spf <- 5 # spatial factor
-def <- abs(unique(df$latitude)[2]-unique(df$latitude)[1])/2
+def <- abs(unique(df$latitude)[2]-unique(df$latitude)[1])/(2*spf)
 
-x <- seq(min(df$longitude) - def*((spf-1)/spf),
-         max(df$longitude) + def*((spf-1)/spf),
-         length.out = length(unique(df$longitude))*spf)
-
-y <- seq(min(df$latitude) - def*((spf-1)/spf),
-         max(df$latitude) + def*((spf-1)/spf),
-         length.out = length(unique(df$latitude))*spf)
-
-dp <- as.matrix(expand.grid(x, y))
-dpdf <- data.frame(dp)
-names(dpdf) <- c("x", "y")
-
-dpdf_sf <- st_as_sf(dpdf, coords = c("x", "y"), crs="EPSG:4326")
-dpdf_sf$id <- 1:nrow(dpdf)
+dpdf_sf <- fm_pixels(
+  fm_transform(mesh, crs = "EPSG:4326"),
+  dims = c(length(unique(df$longitude)), length(unique(df$latitude)))*spf,
+  xlim = c(xmin(sq) + def, xmax(sq) - def),
+  ylim = c(ymin(sq) + def, ymax(sq) - def),
+  format = "sf"
+)
+dp_km <- st_transform(dpdf_sf, crs_km)
+dp <- st_coordinates(dp_km)
 
 # Plots
+corner <- st_bbox(c(xmin = -9.7, ymin = 36.8, xmax = -9.4, ymax = 37.1), crs = 4326)
+corner <- st_bbox(st_transform(st_as_sfc(corner), crs_km))
+xl <- c(corner[["xmin"]], corner[["xmax"]])
+yl <- c(corner[["ymin"]], corner[["ymax"]])
 par(mfrow = c(1, 2), pty = "s")
-plot(mesh, xlim = c(-9.65, -9.45), ylim = c(36.5, 37.5))
-plot(map$geometry, add = TRUE, border = "red", lwd = 2)
+plot(mesh, xlim = xl, ylim = yl, asp = 1, main = "")
+plot(map_km$geometry, add = TRUE, border = "red", lwd = 2)
 
-plot(map$geometry, border = "red", lwd = 2 , xlim = c(-9.7, -9.5),
-     ylim = c(36.8, 37))
-plot(dpdf_sf$geometry, add = TRUE, col = "blue", lwd = 1)
-
+plot(map_km$geometry, border = "red", lwd = 2, xlim = xl, ylim = yl, asp = 1)
+plot(st_geometry(dp_km), add = TRUE, col = "blue", pch = 20, cex = 0.6)
 
 
-## ----elev-plot-2, fig.cap="Elevation over Portugal on the input grid (left) and the prediction grid (right), with country boundaries for reference.", fig.align='center', include=TRUE, echo=TRUE----
-# Time consuming: this part takes around 1 minute to be executed
-# Converting to Raster* object
-r_ras <- raster::raster(r_crop)
 
+## ----elev-plot-2, dev="png", dpi=if (knitr::is_latex_output()) 300 else 96, fig.cap="Elevation over Portugal on the input grid (left) and the prediction grid (right), with country boundaries for reference.", fig.alt="Two elevation maps of Portugal with the same colour scale, from dark purple (0 metres) to yellow (about 1900 metres), and the borders of Portugal and Spain in red. The left map shows the 0.1 degree input cells as blocky squares, and the right map shows the 0.02 degree prediction cells with much more detail, such as mountains in the north and river valleys.", fig.align='center', include=TRUE, echo=TRUE----
 # Extract elevation values in the original dataset
-map$elev <- exact_extract(r_ras, map, "mean", progress = FALSE)
+map$elev <- exact_extract(r_crop, map, "mean", progress = FALSE)
 
 # Create the prediction dataset in sf format
 map_pred <- st_as_sf(st_make_grid(sq, n = c(length(unique(df$longitude)),
@@ -168,13 +275,16 @@ map_pred <- st_as_sf(st_make_grid(sq, n = c(length(unique(df$longitude)),
 st_crs(map_pred) <- "EPSG:4326"
 
 # Extract elevation values in the prediction dataset
-map_pred$elev <- exact_extract(r_ras, map_pred, "mean", progress = FALSE)
+map_pred$elev <- exact_extract(r_crop, map_pred, "mean", progress = FALSE)
+
+# Common color scale for both panels
+lims <- range(c(map$elev, map_pred$elev))
 
 # Plot elevation in the input grid
 p1 <- ggplot(map) +
   geom_sf(aes(fill = elev), color = NA) +
-  scale_fill_viridis_c(name = "Elevation (m)") +
-  geom_sf(data = boundary, fill = NA, color = "black") +
+  scale_fill_viridis_c(name = "Elevation (m)", limits = lims) +
+  geom_sf(data = boundary, fill = NA, color = "red") +
   coord_sf(xlim = c(-10, -6), ylim = c(36.5, 42.5),
            expand = FALSE) +
   theme(
@@ -185,8 +295,8 @@ p1 <- ggplot(map) +
 # Plot elevation in the prediction grid
 p2 <- ggplot(map_pred) +
   geom_sf(aes(fill = elev), color = NA) +
-  scale_fill_viridis_c(name = "Elevation (m)") +
-  geom_sf(data = boundary, fill = NA, color = "black") +
+  scale_fill_viridis_c(name = "Elevation (m)", limits = lims) +
+  geom_sf(data = boundary, fill = NA, color = "red") +
   coord_sf(xlim = c(-10, -6), ylim = c(36.5, 42.5),
            expand = FALSE) +
   theme(
@@ -194,28 +304,34 @@ p2 <- ggplot(map_pred) +
     plot.margin = margin(t = 5.5, r = 5.5, b = 18, l = 5.5)
   )
 
-p1 + p2
+p1 + p2 + plot_layout(guides = "collect")
 
 
 ## ----input-inla, include=TRUE, echo=TRUE--------------------------------------
 # Construct the SPDE in the spatial mesh
-spde <- inla.spde2.matern(mesh = mesh, alpha = 2, constr = TRUE)
+spde <- inla.spde2.pcmatern(mesh = mesh, alpha = 2, constr = TRUE,
+                            prior.range = c(50, 0.5),
+                            prior.sigma = c(5, 0.01))
 
-n.ar <- nrow(map) # number of initial regions
 nv <- mesh$n # number of mesh nodes
 
-mesh_sf <- st_as_sf(data.frame(x=mesh$loc[, 1], y=mesh$loc[, 2], id=1:nv),
-                    coords = c("x", "y"), crs="EPSG:4326")
+# Grid of m x m points in each cell, then projected to UTM
+m <- 20
+cell_points <- function(cell) {
+  b <- st_bbox(cell)
+  dx <- (b[["xmax"]] - b[["xmin"]]) / m
+  dy <- (b[["ymax"]] - b[["ymin"]]) / m
+  as.matrix(expand.grid(x = b[["xmin"]] + dx * (seq_len(m) - 0.5),
+                        y = b[["ymin"]] + dy * (seq_len(m) - 0.5)))
+}
+pts <- do.call(rbind, lapply(st_geometry(map), cell_points))
+pts <- st_as_sf(data.frame(pts), coords = c("x", "y"), crs = "EPSG:4326")
+pts <- st_coordinates(st_transform(pts, crs_km))
 
 # Projection matrix from initial data to the triangulated mesh
-A.m <- matrix(0, n.ar, nv)
-inter <- as.list(st_contains(map[, c()], mesh_sf))
-
-for (i in 1:n.ar){
-  idx <- inter[[i]]
-  A.m[i, idx] <- 1/length(idx)
-}
-A.m <- as(A.m, "dgCMatrix")
+A.m <- inla.spde.make.A(mesh = mesh, loc = pts,
+                        block = rep(seq_len(nrow(map)), each = m^2),
+                        block.rescale = "sum")
 
 # Projection matrix from the mesh to the predicted points
 A.pr <- inla.spde.make.A(mesh = mesh, loc = dp)
@@ -246,9 +362,7 @@ stk.pred <- inla.stack(
 stk.full <- inla.stack(stk.est, stk.pred)
 
 
-## ----fixed-table, tab.cap="Posterior summary of the fixed effects (intercept and elevation coefficient) for the PM2.5 concentration model in Portugal.", include=TRUE, echo=TRUE----
-# Time consuming: This preprocessing takes roughly 5 minutes to be executed
-
+## ----model-fit, results="hide", include=TRUE, echo=TRUE-----------------------
 # INLA formula
 form <- y ~ 0 + b0 + elev + f(s, model = spde)
 
@@ -267,7 +381,13 @@ res$summary.fixed |>
   kable_styling(full_width = FALSE)
 
 
-## ----pred-plot, fig.cap="PM2.5 over Portugal on the input grid (left) and disaggregated predictions on the finer grid (right).", fig.align='center', include=TRUE, echo=TRUE----
+## ----fixed-table, tab.cap="Posterior summary of the fixed effects (intercept and elevation coefficient) for the PM2.5 concentration model in Portugal.", include=TRUE, echo=FALSE----
+res$summary.fixed |>
+  knitr::kable(digits = 3) |>
+  kable_styling(full_width = FALSE, latex_options = "HOLD_position")
+
+
+## ----pred-plot, dev="png", dpi=if (knitr::is_latex_output()) 300 else 96, fig.cap="PM2.5 over Portugal on the input grid (left) and disaggregated predictions on the finer grid (right).", fig.alt="Two PM2.5 maps of Portugal with the same colour scale, from dark purple (about 4) to yellow (about 21), and the borders of Portugal and Spain in red. The left map shows the blocky 0.1 degree input cells, and the right map shows a smooth predicted surface with the same pattern: high values along the west coast around Lisbon and Porto, and low values in the interior.", fig.align='center', include=TRUE, echo=TRUE----
 # get indexes of the response variable
 idx <- inla.stack.index(stk.full, 'y.pred')$data
 
@@ -277,11 +397,14 @@ map$pm2p5 <- df$pm2p5
 # Prediction
 map_pred$pm2p5 <- res$summary.linear.predictor[idx, "mean"]
 
+# Common color scale for both panels
+lims <- range(c(map$pm2p5, map_pred$pm2p5))
+
 # Plot for input grid
 p1 <- ggplot(map) +
   geom_sf(aes(fill = pm2p5), color = NA) +
-  scale_fill_viridis_c(name = "Pm2.5") +
-  geom_sf(data = boundary, fill = NA, color = "black") +
+  scale_fill_viridis_c(name = "PM2.5", limits = lims) +
+  geom_sf(data = boundary, fill = NA, color = "red") +
   coord_sf(xlim = c(-10, -6), ylim = c(36.5, 42.5),
            expand = FALSE) +
   theme(
@@ -292,8 +415,8 @@ p1 <- ggplot(map) +
 # Plot for predictions
 p2 <- ggplot(map_pred) +
   geom_sf(aes(fill = pm2p5), color = NA) +
-  scale_fill_viridis_c(name = "Pm2.5") +
-  geom_sf(data = boundary, fill = NA, color = "black") +
+  scale_fill_viridis_c(name = "PM2.5", limits = lims) +
+  geom_sf(data = boundary, fill = NA, color = "red") +
   coord_sf(xlim = c(-10, -6), ylim = c(36.5, 42.5),
            expand = FALSE) +
   theme(
@@ -302,5 +425,5 @@ p2 <- ggplot(map_pred) +
   )
 
 # Combine plots
-p1 + p2
+p1 + p2 + plot_layout(guides = "collect")
 
