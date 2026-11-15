@@ -1,6 +1,6 @@
 # Spatial Disaggregation Modeling with R-INLA for Air Pollution Applications
 
-Code and data for the article *Spatial Disaggregation Modeling with R-INLA for Air Pollution Applications*, by Fernando Rodriguez Avellaneda and Paula Moraga (King Abdullah University of Science and Technology, KAUST), submitted to The R Journal.
+Code and data for the article *Spatial Disaggregation Modeling with R-INLA for Air Pollution Applications*, by Fernando Rodriguez Avellaneda and Paula Moraga (King Abdullah University of Science and Technology, KAUST), accepted for publication in The R Journal.
 
 The article shows how to fit a spatial disaggregation model with the SPDE approach in `INLA`. As an example, we disaggregate the mean PM2.5 concentration over Portugal in January 2019 from the CAMS reanalysis grid (0.1°, about 10 km) to a finer grid (0.02°, about 2 km), using elevation as a covariate.
 
@@ -12,7 +12,6 @@ The article shows how to fit a spatial disaggregation model with the SPDE approa
 | `my-rjournal-paper.R` | R code of the article, extracted from the Rmd |
 | `my-rjournal-paper.pdf`, `my-rjournal-paper.html` | Rendered article |
 | `my-rjournal-paper.tex` | LaTeX file generated when rendering |
-| `styles.css` | Style for the HTML version |
 | `data/pm2p5_portugal.csv` | Mean PM2.5 (μg/m³) on the CAMS grid over Portugal, January 2019 |
 | `data/eurodemc.tif` | EuroDEM elevation (m), cropped to the study region and aggregated |
 

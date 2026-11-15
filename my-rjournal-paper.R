@@ -15,19 +15,32 @@ library(tidyterra)
 library(fmesher)
 library(INLA)
 
-pkg <- function(x) {
-  if (knitr::is_html_output()) {
-    sprintf("<a href='https://CRAN.R-project.org/package=%s'><code>%s</code></a>", x, x)
-  } else {
-    sprintf("\\texttt{%s}", x)
+# Section numbers for cross-references (distill does not number them in HTML)
+sec_num <- local({
+  x <- readLines(knitr::current_input(), warn = FALSE)
+  fence <- cumsum(grepl("^```", x)) %% 2 == 1
+  h <- x[!fence & grepl("^#{1,3} ", x) & !grepl("\\{-\\}|unnumbered", x)]
+  lev <- nchar(sub(" .*", "", h))
+  cnt <- c(0, 0, 0)
+  num <- character(length(h))
+  for (j in seq_along(h)) {
+    cnt[lev[j]] <- cnt[lev[j]] + 1
+    if (lev[j] < 3) cnt[(lev[j] + 1):3] <- 0
+    num[j] <- paste(cnt[seq_len(min(lev[j], 2))], collapse = ".")  # as in the PDF
   }
+  ids <- sub(".*\\{#([^}]+)\\}.*", "\\1", h)
+  setNames(num, ids)[grepl("\\{#", h)]
+})
+secref <- function(id) {
+  if (knitr::is_html_output()) sprintf("[%s](#%s)", sec_num[[id]], id)
+  else sprintf("\\@ref(%s)", id)
 }
 
 #knitr::write_bib(c(.packages()), "packages.bib",prefix = getOption("knitr.bib.prefix", "R-"))
 
 
 
-## ----weights-example, fig.cap="Example of a region $R_i$ given by one input cell, shown in UTM coordinates and overlaid on a triangulated mesh, with one mesh node $k$ marked by a white circle. (a) Contribution of one grid point (blue) to the three nodes of its triangle, with the contribution to node $k$ in bold. (b) Contributions of the 400 grid points to node $k$, with zero contributions in grey. Their average is the weight $A_{ik} \\approx 0.207$.", fig.alt="Two panels of the same red region over a dark grey triangular mesh, in UTM coordinates, with one mesh node marked by a white circle. In panel (a), a blue grid point lies in a blue shaded triangle whose corners are labelled 0.49, 0.22 and 0.29, with 0.49 at the marked node in bold. In panel (b), the grid points are coloured from dark purple to yellow by their contribution to the marked node, highest near the node and grey where the contribution is zero, and the marked node is labelled 0.207 in bold.", fig.align="center", out.width="100%", fig.width=8, fig.height=3.9----
+## ----weights-example, fig.cap="Example of a region $R_i$ given by one input cell, shown in UTM coordinates and overlaid on a triangulated mesh, with one mesh node $k$ marked by a white circle. (a) Contribution of one grid point (blue) to the three nodes of its triangle, with the contribution to node $k$ in bold. (b) Contributions of the 400 grid points to node $k$, with zero contributions in gray. Their average is the weight $A_{ik} \\approx 0.207$.", fig.alt="Two panels of the same red region over a dark gray triangular mesh, in UTM coordinates, with one mesh node marked by a white circle. In panel (a), a blue grid point lies in a blue shaded triangle whose corners are labelled 0.49, 0.22 and 0.29, with 0.49 at the marked node in bold. In panel (b), the grid points are colored from dark purple to yellow by their contribution to the marked node, highest near the node and gray where the contribution is zero, and the marked node is labelled 0.207 in bold.", fig.align="center", out.width="100%", fig.width=8, fig.height=3.9----
 local({
   # Input grid and mesh
   sq <- ext(-9.65, -6.05, 36.85, 42.25)
@@ -152,7 +165,7 @@ local({
 # write.csv(df, "data/pm2p5_portugal.csv", row.names = FALSE)
 
 
-## ----pm25-plot, dev="png", dpi=if (knitr::is_latex_output()) 300 else 96,fig.align='center', fig.cap="Mean PM2.5 concentration in Portugal during January 2019. Country boundaries for Portugal and Spain are overlaid for geographic reference.", fig.alt="Map of mean PM2.5 over Portugal on the 0.1 degree CAMS grid, coloured from dark purple (about 4) to yellow (about 20), with the borders of Portugal and Spain in red. The highest values form a band along the west coast, around Lisbon near 38.7 degrees north and around Porto near 41 degrees north, while most of the interior has low values.", include=TRUE, echo=TRUE----
+## ----pm25-plot, dev="png", dpi=if (knitr::is_latex_output()) 300 else 96,fig.align='center', fig.cap="Mean PM2.5 concentration in Portugal during January 2019. Country boundaries for Portugal and Spain are overlaid for geographic reference.", fig.alt="Map of mean PM2.5 over Portugal on the 0.1 degree CAMS grid, colored from dark purple (about 4) to yellow (about 20), with the borders of Portugal and Spain in red. The highest values form a band along the west coast, around Lisbon near 38.7 degrees north and around Porto near 41 degrees north, while most of the interior has low values.", include=TRUE, echo=TRUE----
 # Define the squared study region
 sq <- ext(-9.65, -6.05, 36.85, 42.25)
 
@@ -194,7 +207,7 @@ ggplot() +
 #             gdal = "COMPRESS=LZW")
 
 
-## ----elev-plot-1, dev="png", dpi=if (knitr::is_latex_output()) 300 else 96, fig.cap="EuroDEM elevation raster over Portugal (meters), cropped to the study region and used as a covariate in the disaggregation model.", fig.alt="Fine resolution elevation map of Portugal, coloured from dark purple (0 metres) to yellow (about 2000 metres), with the borders of Portugal and Spain in red. The sea and the coast are low, the north and north-east are mountainous with the highest values near 40.3 degrees north and along the northern border, and river valleys appear as dark lines.", fig.align='center', include=TRUE, echo=TRUE----
+## ----elev-plot-1, dev="png", dpi=if (knitr::is_latex_output()) 300 else 96, fig.cap="EuroDEM elevation raster over Portugal (meters), cropped to the study region and used as a covariate in the disaggregation model.", fig.alt="Fine resolution elevation map of Portugal, colored from dark purple (0 meters) to yellow (about 2000 meters), with the borders of Portugal and Spain in red. The sea and the coast are low, the north and north-east are mountainous with the highest values near 40.3 degrees north and along the northern border, and river valleys appear as dark lines.", fig.align='center', include=TRUE, echo=TRUE----
 # Reading elevation dataset
 r_crop <- rast("data/eurodemc.tif")
 r_crop[is.na(r_crop)] <- 0
@@ -211,14 +224,14 @@ ggplot() +
            expand = FALSE)
 
 
-## ----mesh-plot, dev="png", dpi=if (knitr::is_latex_output()) 300 else 96, fig.cap="Spatial discretization for disaggregation. Original grid support is shown in red. A portion of the triangulated mesh is shown in black (left), and prediction points for `spf=5` are shown in blue (right).", fig.alt="Two panels of the same corner of the study region. On the left, red square input cells are overlaid on a grey mesh of nearly equilateral triangles, with several triangles across each cell. On the right, the same red cells each contain a regular 5 by 5 grid of blue prediction points.", fig.align='center', include=TRUE, echo=TRUE----
+## ----mesh-plot, dev="png", dpi=if (knitr::is_latex_output()) 300 else 96, fig.cap="Spatial discretization for disaggregation. Original grid support is shown in red. A portion of the triangulated mesh is shown in black (left), and prediction points for `spf=5` are shown in blue (right).", fig.alt="Two panels of the same corner of the study region. On the left, red square input cells are overlaid on a gray mesh of nearly equilateral triangles, with several triangles across each cell. On the right, the same red cells each contain a regular 5 by 5 grid of blue prediction points.", fig.align='center', include=TRUE, echo=TRUE----
 # Initial squared grid
 map <- st_as_sf(st_make_grid(sq, n = c(length(unique(df$longitude)),
                                length(unique(df$latitude)))))
 st_geometry(map) <- "geometry"
 st_crs(map) <- "EPSG:4326"
 
-# Spatial mesh in UTM zone 29N, in kilometres
+# Spatial mesh in UTM zone 29N, in kilometers
 crs_km <- fm_crs("+proj=utm +zone=29 +datum=WGS84 +units=km +no_defs")
 map_km <- st_transform(map, crs_km)
 inner <- st_buffer(st_union(map_km), 10)
@@ -265,7 +278,7 @@ plot(st_geometry(dp_km), add = TRUE, col = "blue", pch = 20, cex = 0.6)
 
 
 
-## ----elev-plot-2, dev="png", dpi=if (knitr::is_latex_output()) 300 else 96, fig.cap="Elevation over Portugal on the input grid (left) and the prediction grid (right), with country boundaries for reference.", fig.alt="Two elevation maps of Portugal with the same colour scale, from dark purple (0 metres) to yellow (about 1900 metres), and the borders of Portugal and Spain in red. The left map shows the 0.1 degree input cells as blocky squares, and the right map shows the 0.02 degree prediction cells with much more detail, such as mountains in the north and river valleys.", fig.align='center', include=TRUE, echo=TRUE----
+## ----elev-plot-2, dev="png", dpi=if (knitr::is_latex_output()) 300 else 96, fig.cap="Elevation over Portugal on the input grid (left) and the prediction grid (right), with country boundaries for reference.", fig.alt="Two elevation maps of Portugal with the same color scale, from dark purple (0 meters) to yellow (about 1900 meters), and the borders of Portugal and Spain in red. The left map shows the 0.1 degree input cells as blocky squares, and the right map shows the 0.02 degree prediction cells with much more detail, such as mountains in the north and river valleys.", fig.align='center', include=TRUE, echo=TRUE----
 # Extract elevation values in the original dataset
 map$elev <- exact_extract(r_crop, map, "mean", progress = FALSE)
 
@@ -387,7 +400,7 @@ res$summary.fixed |>
   kable_styling(full_width = FALSE, latex_options = "HOLD_position")
 
 
-## ----pred-plot, dev="png", dpi=if (knitr::is_latex_output()) 300 else 96, fig.cap="PM2.5 over Portugal on the input grid (left) and disaggregated predictions on the finer grid (right).", fig.alt="Two PM2.5 maps of Portugal with the same colour scale, from dark purple (about 4) to yellow (about 21), and the borders of Portugal and Spain in red. The left map shows the blocky 0.1 degree input cells, and the right map shows a smooth predicted surface with the same pattern: high values along the west coast around Lisbon and Porto, and low values in the interior.", fig.align='center', include=TRUE, echo=TRUE----
+## ----pred-plot, dev="png", dpi=if (knitr::is_latex_output()) 300 else 96, fig.cap="PM2.5 over Portugal on the input grid (left) and disaggregated predictions on the finer grid (right).", fig.alt="Two PM2.5 maps of Portugal with the same color scale, from dark purple (about 4) to yellow (about 21), and the borders of Portugal and Spain in red. The left map shows the blocky 0.1 degree input cells, and the right map shows a smooth predicted surface with the same pattern: high values along the west coast around Lisbon and Porto, and low values in the interior.", fig.align='center', include=TRUE, echo=TRUE----
 # get indexes of the response variable
 idx <- inla.stack.index(stk.full, 'y.pred')$data
 

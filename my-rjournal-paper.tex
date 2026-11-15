@@ -18,7 +18,7 @@ Spatial data are common in fields such as environmental science, epidemiology, a
 
 Spatial disaggregation methods aim to address this limitation by recovering local patterns from aggregated observations. A common modeling approach for spatial disaggregation assumes an underlying continuous latent process and links areal observations to it through a change-of-support operator, which allows prediction on finer grids \citep{fuentesandraftery05}. Bayesian inference provides a natural framework for fitting these models, but standard Markov chain Monte Carlo (MCMC) \citep{Metropolis1953, Hastings1970} methods can be computationally demanding \citep{tanaka2019spatiallya, yousefi2019multitaska}.
 
-The R package \texttt{disaggregation} provides a streamlined workflow for Bayesian spatial disaggregation regression implemented in Template Model Builder (TMB) \citep{Kristensen2016TMB, Monnahan2018TMBstan}. Inference is based on a Laplace approximation, which in one example took about 85 seconds, compared with about 56 hours for a full MCMC alternative via tmbstan \citep{nandi2023disaggregation}.
+The R package \CRANpkg{disaggregation} provides a streamlined workflow for Bayesian spatial disaggregation regression implemented in Template Model Builder (TMB) \citep{Kristensen2016TMB, Monnahan2018TMBstan}. Inference is based on a Laplace approximation, which in one example took about 85 seconds, compared with about 56 hours for a full MCMC alternative via tmbstan \citep{nandi2023disaggregation}.
 
 The Laplace approximation is faster than MCMC, but this speed comes at a cost. The results can be biased, and the uncertainty may not be well quantified, which is difficult to detect without also fitting the model with MCMC. For example, \citet{fong2010bayesian} found that INLA performed well in most of the generalized linear mixed models they studied, but not in one example with binary data with few or no replications, a problem later addressed by \citet{ferkingstad2015improving}. In our case, the likelihood is Gaussian and the aggregation is a linear function of the latent field. Therefore, given the hyperparameters, the posterior distribution of the latent field is exactly Gaussian, and the approximation error comes mainly from the numerical integration over the few hyperparameters and from the SPDE discretization on the mesh. We do not compare our results with a full MCMC fit in this paper.
 
@@ -54,7 +54,7 @@ y(\mathbf{s})
 \begin{bmatrix}
 1 \\ x_1(\mathbf{s}) \\ \vdots \\ x_p(\mathbf{s})
 \end{bmatrix}
-+ z(\mathbf{s}).
++ z(\mathbf{s}),
 \end{aligned}
 \label{eq:spa-cont}
 \end{equation}
@@ -83,6 +83,7 @@ The spatial random effect \(z(\mathbf{s})\) in Equation \eqref{eq:spa-cont} is m
 \frac{\sigma^{2}}{2^{\nu-1}\Gamma(\nu)}
 \left(\kappa\left\|\mathbf{s}_i-\mathbf{s}_k\right\|\right)^{\nu}
 K_{\nu}\left(\kappa\left\|\mathbf{s}_i-\mathbf{s}_k\right\|\right),
+\label{eq:matern}
 \end{equation}
 
 where \(\sigma^{2}\) is the marginal variance, \(K_{\nu}(\cdot)\) is the modified Bessel function of the second kind, and \(\nu>0\) controls the smoothness of the field. In practice, \(\nu\) is often fixed for stability. The parameter \(\kappa>0\) controls the spatial range, and a common practical definition is \(\rho = \sqrt{8\nu}/\kappa\). This Matérn specification is also convenient for computation, since it has a direct SPDE representation that can be implemented efficiently on a triangulated mesh within the INLA framework.
@@ -122,11 +123,11 @@ Each grid point lies in one triangle, and the values it gives to the three nodes
 
 \begin{figure}
 
-{\centering \includegraphics[width=1\linewidth,alt={Two panels of the same red region over a dark grey triangular mesh, in UTM coordinates, with one mesh node marked by a white circle. In panel (a), a blue grid point lies in a blue shaded triangle whose corners are labelled 0.49, 0.22 and 0.29, with 0.49 at the marked node in bold. In panel (b), the grid points are coloured from dark purple to yellow by their contribution to the marked node, highest near the node and grey where the contribution is zero, and the marked node is labelled 0.207 in bold.}]{my-rjournal-paper_files/figure-latex/weights-example-1} 
+{\centering \includegraphics[width=1\linewidth,alt={Two panels of the same red region over a dark gray triangular mesh, in UTM coordinates, with one mesh node marked by a white circle. In panel (a), a blue grid point lies in a blue shaded triangle whose corners are labelled 0.49, 0.22 and 0.29, with 0.49 at the marked node in bold. In panel (b), the grid points are colored from dark purple to yellow by their contribution to the marked node, highest near the node and gray where the contribution is zero, and the marked node is labelled 0.207 in bold.}]{my-rjournal-paper_files/figure-latex/weights-example-1} 
 
 }
 
-\caption{Example of a region $R_i$ given by one input cell, shown in UTM coordinates and overlaid on a triangulated mesh, with one mesh node $k$ marked by a white circle. (a) Contribution of one grid point (blue) to the three nodes of its triangle, with the contribution to node $k$ in bold. (b) Contributions of the 400 grid points to node $k$, with zero contributions in grey. Their average is the weight $A_{ik} \approx 0.207$.}\label{fig:weights-example}
+\caption{Example of a region $R_i$ given by one input cell, shown in UTM coordinates and overlaid on a triangulated mesh, with one mesh node $k$ marked by a white circle. (a) Contribution of one grid point (blue) to the three nodes of its triangle, with the contribution to node $k$ in bold. (b) Contributions of the 400 grid points to node $k$, with zero contributions in gray. Their average is the weight $A_{ik} \approx 0.207$.}\label{fig:weights-example}
 \end{figure}
 
 In \texttt{INLA}, these mappings are implemented by defining the SPDE model on the mesh and supplying the projection matrices in the \texttt{inla.stack()} objects for estimation and prediction.
@@ -148,9 +149,9 @@ library(INLA)
 inla.version()
 \end{verbatim}
 
-The function \texttt{inla.version()} reports the installed version of \texttt{INLA}, which we use to check the installation. We used R 4.6.0, \texttt{INLA} 26.8.7, \texttt{fmesher} 0.8.0, \texttt{terra} 1.9.34, \texttt{sf} 1.1.1, \texttt{exactextractr} 0.10.1 and \texttt{ggplot2} 4.0.3.
+The function \texttt{inla.version()} reports the installed version of \texttt{INLA}, which we use to check the installation. We used R 4.6.0, \texttt{INLA} 26.8.7, \CRANpkg{fmesher} 0.8.0, \CRANpkg{terra} 1.9.34, \CRANpkg{sf} 1.1.1, \CRANpkg{exactextractr} 0.10.1 and \CRANpkg{ggplot2} 4.0.3.
 
-Once the data and covariates are ready, the INLA workflow in this paper follows a fairly standard sequence. First, we build a triangulated mesh to represent the latent field with the SPDE approach. In our examples, the mesh is constructed over the study region using functions such as \texttt{fm\_hexagon\_lattice()}, \texttt{fm\_extensions()} and \texttt{fm\_mesh\_2d()} (from \texttt{fmesher}), choosing parameters like \texttt{edge\_len} and \texttt{max.edge} so the mesh is finer than the original data support.
+Once the data and covariates are ready, the INLA workflow in this paper follows a fairly standard sequence. First, we build a triangulated mesh to represent the latent field with the SPDE approach. In our examples, the mesh is constructed over the study region using functions such as \texttt{fm\_hexagon\_lattice()}, \texttt{fm\_extensions()} and \texttt{fm\_mesh\_2d()} (from \CRANpkg{fmesher}), choosing parameters like \texttt{edge\_len} and \texttt{max.edge} so the mesh is finer than the original data support.
 
 Next, we define prediction locations on the target resolution, using helpers such as \texttt{st\_make\_grid()} and \texttt{fm\_pixels()}. Finally, for both estimation and prediction, the covariates must be available on the same supports as the response. Model specification in INLA is done by translating the linear predictor into a formula and defining the latent SPDE component. The Matérn SPDE is created with \texttt{inla.spde2.pcmatern()}, and the latent field enters the formula through terms like \texttt{f(s,\ model\ =\ spde)}.
 
@@ -167,7 +168,7 @@ In this section, we illustrate spatial disaggregation by improving the resolutio
 The main objective of this model is to perform spatial disaggregation by increasing the resolution from \(0.1^\circ\) to \(0.02^\circ\), which corresponds approximately to a change from 10 km to 2 km, using \texttt{INLA}. We also include elevation as a high-resolution covariate to help explain local variation in PM2.5 and improve the disaggregation. The model assumes the existence of a latent continuous spatial process for PM2.5 that is observed only through aggregated measurements. Specifically,
 
 \begin{equation}
-\text{pm}_{2.5}(\mathbf{s}) = \beta_0 + \beta_1\,\text{elevation}(\mathbf{s}) + z(\mathbf{s}) + e(\mathbf{s}) \label{eq:app-pm25}
+\text{pm}_{2.5}(\mathbf{s}) = \beta_0 + \beta_1\,\text{elevation}(\mathbf{s}) + z(\mathbf{s}) + e(\mathbf{s}), \label{eq:app-pm25}
 \end{equation}
 where \(\beta_0\) is an intercept and \(\beta_1\) is the regression coefficient associated with elevation. The term \(z(\mathbf{s})\) represents a spatially structured random effect, modeled as a zero mean Gaussian process with a Matérn covariance function, and \(e(\mathbf{s})\) is an unstructured error term, modeled as a zero mean Gaussian process that is independent across space.
 The link between the latent field and the areal observations is defined through Equations \eqref{eq:spa-cont}, \eqref{eq:spa-agg}, and \eqref{eq:spa-areal}. Inference is then performed using the projection (aggregation) matrix described in Section \ref{sec:inla-inf-spa}.
@@ -180,7 +181,7 @@ In this section, we describe how to obtain the PM2.5 dataset and the covariate i
 
 To download PM2.5 data, we need to create an account on the Atmospheric Data Store (ADS), accept the terms and conditions, and obtain the ``Licence to use Copernicus Products.'' After setup, the data can be downloaded using the Python API. More details on setting up the API are available at \url{https://ads.atmosphere.copernicus.eu/how-to-api}. In our request, the argument \texttt{variable\ =\ {[}"particulate\_matter\_2.5um"{]}} selects PM2.5 concentrations, \texttt{model\ =\ {[}"ensemble"{]}} specifies the ensemble product, \texttt{level\ =\ {[}"0"{]}} indicates the surface level, \texttt{type\ =\ {[}"validated\_reanalysis"{]}} requests the validated reanalysis product, and \texttt{year\ =\ {[}"2019"{]}} and \texttt{month\ =\ {[}"01"{]}} restrict the download to January 2019.
 
-After downloading and unzipping the data, we use the \texttt{terra} package to read the \texttt{nc} file. NetCDF (Network Common Data Form) files are widely used for storing multi-dimensional scientific data, such as climate or GIS datasets, because they are self-describing, portable, and efficient for large arrays. The original dataset contains hourly samples for the 31 days of January 2019, totaling 744 observations. Since our focus is on identifying mean trends, we calculated the average PM2.5 concentration for each location. As the original data covers the entire European continent, we cropped the spatial extent to focus specifically on Portugal. To provide better geographical context in our visualizations, we also included the administrative boundaries of Portugal and Spain for clear regional identification using packages \texttt{rnaturalearth} and \texttt{sf}. Finally for plotting we used \texttt{ggplot2}, \texttt{tidyterra} and \texttt{viridis} packages.
+After downloading and unzipping the data, we use the \CRANpkg{terra} package to read the \texttt{nc} file. NetCDF (Network Common Data Form) files are widely used for storing multi-dimensional scientific data, such as climate or GIS datasets, because they are self-describing, portable, and efficient for large arrays. The original dataset contains hourly samples for the 31 days of January 2019, totaling 744 observations. Since our focus is on identifying mean trends, we calculated the average PM2.5 concentration for each location. As the original data covers the entire European continent, we cropped the spatial extent to focus specifically on Portugal. To provide better geographical context in our visualizations, we also included the administrative boundaries of Portugal and Spain for clear regional identification using packages \CRANpkg{rnaturalearth} and \CRANpkg{sf}. Finally for plotting we used \CRANpkg{ggplot2}, \CRANpkg{tidyterra} and \CRANpkg{viridis} packages.
 
 \begin{verbatim}
 # Define the squared study region
@@ -226,7 +227,7 @@ ggplot() +
 
 \begin{figure}
 
-{\centering \includegraphics[alt={Map of mean PM2.5 over Portugal on the 0.1 degree CAMS grid, coloured from dark purple (about 4) to yellow (about 20), with the borders of Portugal and Spain in red. The highest values form a band along the west coast, around Lisbon near 38.7 degrees north and around Porto near 41 degrees north, while most of the interior has low values.}]{my-rjournal-paper_files/figure-latex/pm25-plot-1} 
+{\centering \includegraphics[alt={Map of mean PM2.5 over Portugal on the 0.1 degree CAMS grid, colored from dark purple (about 4) to yellow (about 20), with the borders of Portugal and Spain in red. The highest values form a band along the west coast, around Lisbon near 38.7 degrees north and around Porto near 41 degrees north, while most of the interior has low values.}]{my-rjournal-paper_files/figure-latex/pm25-plot-1} 
 
 }
 
@@ -255,7 +256,7 @@ writeRaster(r_ag, "data/eurodemc.tif", overwrite = TRUE, datatype = "FLT4S",
             gdal = "COMPRESS=LZW")
 \end{verbatim}
 
-This preprocessing took about 4 seconds on a laptop with an Intel Core Ultra 9 285H (16 cores) and 63.5 GB of RAM, running Windows 11, without parallelisation. After preprocessing, Figure (\ref{fig:elev-plot-1}) shows the resulting elevation raster over Portugal, with values reported in meters.
+This preprocessing took about 4 seconds on a laptop with an Intel Core Ultra 9 285H (16 cores) and 63.5 GB of RAM, running Windows 11, without parallelization. After preprocessing, Figure (\ref{fig:elev-plot-1}) shows the resulting elevation raster over Portugal, with values reported in meters.
 
 \begin{verbatim}
 # Reading elevation dataset
@@ -276,7 +277,7 @@ ggplot() +
 
 \begin{figure}
 
-{\centering \includegraphics[alt={Fine resolution elevation map of Portugal, coloured from dark purple (0 metres) to yellow (about 2000 metres), with the borders of Portugal and Spain in red. The sea and the coast are low, the north and north-east are mountainous with the highest values near 40.3 degrees north and along the northern border, and river valleys appear as dark lines.}]{my-rjournal-paper_files/figure-latex/elev-plot-1-1} 
+{\centering \includegraphics[alt={Fine resolution elevation map of Portugal, colored from dark purple (0 meters) to yellow (about 2000 meters), with the borders of Portugal and Spain in red. The sea and the coast are low, the north and north-east are mountainous with the highest values near 40.3 degrees north and along the northern border, and river valleys appear as dark lines.}]{my-rjournal-paper_files/figure-latex/elev-plot-1-1} 
 
 }
 
@@ -289,7 +290,7 @@ After obtaining the PM2.5 dataset and the elevation covariate, we need to prepar
 
 \subsubsection{Input grid, mesh, and prediction locations}\label{sec:mesh}
 
-The first step in the disaggregation workflow is to construct an input grid that matches the support of the observed data. Using the dataframe \texttt{df}, we build a squared grid as an \texttt{sf} object with the same spatial extent and dimensions as the original dataset. The second step is to build a spatial mesh that is finer than the initial resolution of the data, as shown on the left side of Figure (\ref{fig:mesh-plot}). We build it in UTM zone 29N (EPSG:32629), in kilometres, so that the spatial range is interpretable. A hexagonal lattice gives triangles of nearly equal size and shape, \texttt{st\_buffer()} extends the inner mesh 10 km beyond the study region so that all input cells are covered, and \texttt{fm\_extensions()} adds an outer mesh that reduces boundary effects. The mesh should be finer than the input cells and small compared with the spatial range, but it does not need to be as fine as the elevation data, because that would add runtime for only a small improvement. In our case, going from an edge length of 5 km to 3 km increased the fit time from about 0.3 to 1.3 minutes, while the predictions changed very little (RMSE of 0.010 \(\mu\)g/m\(^3\)).
+The first step in the disaggregation workflow is to construct an input grid that matches the support of the observed data. Using the dataframe \texttt{df}, we build a squared grid as an \texttt{sf} object with the same spatial extent and dimensions as the original dataset. The second step is to build a spatial mesh that is finer than the initial resolution of the data, as shown on the left side of Figure (\ref{fig:mesh-plot}). We build it in UTM zone 29N (EPSG:32629), in kilometers, so that the spatial range is interpretable. A hexagonal lattice gives triangles of nearly equal size and shape, \texttt{st\_buffer()} extends the inner mesh 10 km beyond the study region so that all input cells are covered, and \texttt{fm\_extensions()} adds an outer mesh that reduces boundary effects. The mesh should be finer than the input cells and small compared with the spatial range, but it does not need to be as fine as the elevation data, because that would add runtime for only a small improvement. In our case, going from an edge length of 5 km to 3 km increased the fit time from about 0.3 to 1.3 minutes, while the predictions changed very little (RMSE of 0.010 \(\mu\)g/m\(^3\)).
 
 Finally, we define the prediction points on the \(0.02^\circ\) grid. Setting \(\texttt{spf}=5\) increases the resolution within each original cell by a factor of \(5 \times 5 = 25\), as illustrated on the right side of Figure (\ref{fig:mesh-plot}). We obtain these locations, the centers of the finer grid cells, with \texttt{fm\_pixels()}. We evaluate the latent field at these centers, which approximates its average over each finer cell.
 
@@ -300,7 +301,7 @@ map <- st_as_sf(st_make_grid(sq, n = c(length(unique(df$longitude)),
 st_geometry(map) <- "geometry"
 st_crs(map) <- "EPSG:4326"
 
-# Spatial mesh in UTM zone 29N, in kilometres
+# Spatial mesh in UTM zone 29N, in kilometers
 crs_km <- fm_crs("+proj=utm +zone=29 +datum=WGS84 +units=km +no_defs")
 map_km <- st_transform(map, crs_km)
 inner <- st_buffer(st_union(map_km), 10)
@@ -348,7 +349,7 @@ plot(st_geometry(dp_km), add = TRUE, col = "blue", pch = 20, cex = 0.6)
 
 \begin{figure}
 
-{\centering \includegraphics[alt={Two panels of the same corner of the study region. On the left, red square input cells are overlaid on a grey mesh of nearly equilateral triangles, with several triangles across each cell. On the right, the same red cells each contain a regular 5 by 5 grid of blue prediction points.}]{my-rjournal-paper_files/figure-latex/mesh-plot-1} 
+{\centering \includegraphics[alt={Two panels of the same corner of the study region. On the left, red square input cells are overlaid on a gray mesh of nearly equilateral triangles, with several triangles across each cell. On the right, the same red cells each contain a regular 5 by 5 grid of blue prediction points.}]{my-rjournal-paper_files/figure-latex/mesh-plot-1} 
 
 }
 
@@ -403,7 +404,7 @@ p1 + p2 + plot_layout(guides = "collect")
 
 \begin{figure}
 
-{\centering \includegraphics[alt={Two elevation maps of Portugal with the same colour scale, from dark purple (0 metres) to yellow (about 1900 metres), and the borders of Portugal and Spain in red. The left map shows the 0.1 degree input cells as blocky squares, and the right map shows the 0.02 degree prediction cells with much more detail, such as mountains in the north and river valleys.}]{my-rjournal-paper_files/figure-latex/elev-plot-2-1} 
+{\centering \includegraphics[alt={Two elevation maps of Portugal with the same color scale, from dark purple (0 meters) to yellow (about 1900 meters), and the borders of Portugal and Spain in red. The left map shows the 0.1 degree input cells as blocky squares, and the right map shows the 0.02 degree prediction cells with much more detail, such as mountains in the north and river valleys.}]{my-rjournal-paper_files/figure-latex/elev-plot-2-1} 
 
 }
 
@@ -412,7 +413,7 @@ p1 + p2 + plot_layout(guides = "collect")
 
 \subsubsection{SPDE specification, projection matrices and INLA stacks}\label{sec:mod-inp}
 
-To fit the model described in Equation \eqref{eq:app-pm25}, we use the triangulated mesh defined before in Section \ref{sec:mesh}. We then construct the SPDE representation on this mesh, using penalised complexity priors \citep{fuglstad2019constructing} for the range \(\rho\) and the standard deviation \(\sigma\) of the field, with \(P(\rho < 50 \text{ km}) = 0.5\) and \(P(\sigma > 5) = 0.01\), and build the corresponding projection matrices that link the observation locations and the prediction points to the mesh nodes. To compute the matrix \texttt{A.m} as described in Section \ref{sec:inla-inf-spa}, we create a grid of points in each input cell and pass them to \texttt{inla.spde.make.A()}. The argument \texttt{block} indicates the cell of each point, and \texttt{block.rescale\ =\ "sum"} averages the values within each cell. In our case, with a \(20 \times 20\) grid in each of the 1,944 input cells, this takes about 4 seconds. Finally, we combine the response, covariates, and latent components into \texttt{INLA} stacks, which are used to perform model estimation and prediction.
+To fit the model described in Equation \eqref{eq:app-pm25}, we use the triangulated mesh defined before in Section \ref{sec:mesh}. We then construct the SPDE representation on this mesh, using penalized complexity priors \citep{fuglstad2019constructing} for the range \(\rho\) and the standard deviation \(\sigma\) of the field, with \(P(\rho < 50 \text{ km}) = 0.5\) and \(P(\sigma > 5) = 0.01\), and build the corresponding projection matrices that link the observation locations and the prediction points to the mesh nodes. To compute the matrix \texttt{A.m} as described in Section \ref{sec:inla-inf-spa}, we create a grid of points in each input cell and pass them to \texttt{inla.spde.make.A()}. The argument \texttt{block} indicates the cell of each point, and \texttt{block.rescale\ =\ "sum"} averages the values within each cell. In our case, with a \(20 \times 20\) grid in each of the 1,944 input cells, this takes about 4 seconds. Finally, we combine the response, covariates, and latent components into \texttt{INLA} stacks, which are used to perform model estimation and prediction.
 
 \begin{verbatim}
 # Construct the SPDE in the spatial mesh
@@ -492,7 +493,7 @@ res$summary.fixed |>
   kable_styling(full_width = FALSE)
 \end{verbatim}
 
-The model fit took about 18 seconds on the laptop described in Section \ref{sec:cov}. Table (\ref{tab:fixed-table}) summarizes the posterior distributions of the fixed effects. The posterior mean of the intercept \(\beta_0\) is 8.22 \(\mu\)g/m\(^3\), which represents the PM2.5 level when elevation is zero. Its uncertainty is large (95\% credible interval from 7.26 to 9.17 \(\mu\)g/m\(^3\)) because it is hard to separate from the long-range variation of the spatial field. The posterior credible interval for the elevation coefficient excludes zero, indicating a clear association between elevation and PM2.5. The posterior mean is \(-0.28\), implying that an increase of 1 km in altitude is associated with a decrease of about 0.28 \(\mu\)g/m\(^3\) in PM2.5. The posterior median of the spatial range is 402 km (95\% credible interval from 247 to 681 km).
+The model fit took about 21 seconds on the laptop described in Section \ref{sec:cov}. Table (\ref{tab:fixed-table}) summarizes the posterior distributions of the fixed effects. The posterior mean of the intercept \(\beta_0\) is 8.22 \(\mu\)g/m\(^3\), which represents the PM2.5 level when elevation is zero. Its uncertainty is large (95\% credible interval from 7.27 to 9.17 \(\mu\)g/m\(^3\)) because it is hard to separate from the long-range variation of the spatial field. The posterior credible interval for the elevation coefficient excludes zero, indicating a clear association between elevation and PM2.5. The posterior mean is \(-0.28\), implying that an increase of 1 km in altitude is associated with a decrease of about 0.28 \(\mu\)g/m\(^3\) in PM2.5. The posterior median of the spatial range is 412 km (95\% credible interval from 224 to 829 km).
 
 \begin{table}[H]
 \centering
@@ -502,9 +503,9 @@ The model fit took about 18 seconds on the laptop described in Section \ref{sec:
 \hline
   & mean & sd & 0.025quant & 0.5quant & 0.975quant & mode & kld\\
 \hline
-b0 & 8.215 & 0.485 & 7.264 & 8.215 & 9.167 & 8.215 & 0\\
+b0 & 8.215 & 0.484 & 7.266 & 8.215 & 9.165 & 8.215 & 0\\
 \hline
-elev & -0.281 & 0.062 & -0.404 & -0.281 & -0.158 & -0.281 & 0\\
+elev & -0.281 & 0.063 & -0.404 & -0.281 & -0.159 & -0.281 & 0\\
 \hline
 \end{tabular}
 \end{table}
@@ -556,7 +557,7 @@ p1 + p2 + plot_layout(guides = "collect")
 
 \begin{figure}
 
-{\centering \includegraphics[alt={Two PM2.5 maps of Portugal with the same colour scale, from dark purple (about 4) to yellow (about 21), and the borders of Portugal and Spain in red. The left map shows the blocky 0.1 degree input cells, and the right map shows a smooth predicted surface with the same pattern: high values along the west coast around Lisbon and Porto, and low values in the interior.}]{my-rjournal-paper_files/figure-latex/pred-plot-1} 
+{\centering \includegraphics[alt={Two PM2.5 maps of Portugal with the same color scale, from dark purple (about 4) to yellow (about 21), and the borders of Portugal and Spain in red. The left map shows the blocky 0.1 degree input cells, and the right map shows a smooth predicted surface with the same pattern: high values along the west coast around Lisbon and Porto, and low values in the interior.}]{my-rjournal-paper_files/figure-latex/pred-plot-1} 
 
 }
 
@@ -570,7 +571,7 @@ In this paper we have demonstrated how to perform spatial disaggregation with \t
 In the application presented, we disaggregate PM2.5 over Portugal from the CAMS \(0.1^\circ\) grid to \(0.02^\circ\), and we include elevation (EuroDEM) as a covariate to relate pollution levels to altitude and improve the spatial interpretation. This framework is based on the implementation developed in \citep{moraga2017geostatistical}. This approach can be extended to multivariate settings by jointly disaggregating several air pollutants, and spatio-temporal settings to estimate variables at higher resolutions both in space and in time. For example, \citep{RodriguezAvellanedaMult} utilized a multivariate setting using the Linear Model of Coregionalization (LMC), to jointly disaggregate PM2.5, PM10, and ozone over Portugal using the same CAMS product \citep{inness2019cams}.
 \citep{avellaneda2025bayesianspatiotemporaldisaggregationmodeling} extended this approach to the spatio-temporal setting and disaggregated Aerosol Optical Depth (AOD) at 550 nm over India using the EAC4 reanalysis from ECMWF \citep{inness2019cams}. In that example, they refined the spatial resolution from \(0.75^\circ\) to \(0.25^\circ\) and the temporal resolution from 3-hourly to hourly, producing spatio-temporal predictions at intermediate time points that were not available in the original product.
 
-The spatial model presented in this paper considers Gaussian responses, where the aggregation is linear in the latent field and the observations can be linked to the field directly through the projection matrix. More general response variables, for example Poisson counts such as disease cases over administrative units, are more challenging because the expected count in a region is the integral of an exponential function of the latent field, which is nonlinear in the field. The \texttt{inlabru} package \citep{lindgren2024inlabru} addresses this type of model by fitting INLA iteratively to a linearised version of the predictor, and \citep{suen2026coherent} use this approach for the disaggregation of aggregated counts. The accuracy argument given in the Introduction does not extend to these non-Gaussian settings, particularly with sparse counts or binary data, where INLA results should be checked against MCMC. On the spatio-temporal side, recent work has proposed efficient spatial disaggregation methods for spatio-temporal datasets \citep{gaedke2025acceleratedspatiotemporalbayesianmodeling}, while the spatio-temporal model in \citep{avellaneda2025bayesianspatiotemporaldisaggregationmodeling} goes one step further by disaggregating not only in space but also in time. A further direction is to combine these ideas and build multivariate spatio-temporal disaggregation models that jointly downscale multiple variables across space and time, and that can handle variables observed on different spatial or temporal supports within a single coherent framework \citep{zhongetal25}.
+The spatial model presented in this paper considers Gaussian responses, where the aggregation is linear in the latent field and the observations can be linked to the field directly through the projection matrix. More general response variables, for example Poisson counts such as disease cases over administrative units, are more challenging because the expected count in a region is the integral of an exponential function of the latent field, which is nonlinear in the field. The \CRANpkg{inlabru} package \citep{lindgren2024inlabru} addresses this type of model by fitting INLA iteratively to a linearized version of the predictor, and \citep{suen2026coherent} use this approach for the disaggregation of aggregated counts. The accuracy argument given in the Introduction does not extend to these non-Gaussian settings, particularly with sparse counts or binary data, where INLA results should be checked against MCMC. On the spatio-temporal side, recent work has proposed efficient spatial disaggregation methods for spatio-temporal datasets \citep{gaedke2025acceleratedspatiotemporalbayesianmodeling}, while the spatio-temporal model in \citep{avellaneda2025bayesianspatiotemporaldisaggregationmodeling} goes one step further by disaggregating not only in space but also in time. A further direction is to combine these ideas and build multivariate spatio-temporal disaggregation models that jointly downscale multiple variables across space and time, and that can handle variables observed on different spatial or temporal supports within a single coherent framework \citep{zhongetal25}.
 
 Overall, this paper presents a practical disaggregation workflow based on latent Gaussian fields and the INLA--SPDE framework, which scales well and can be adapted to spatial, multivariate, and spatio-temporal settings. Although we focus on an air pollution application, the same framework applies to other continuous variables observed on coarse spatial supports, where the goal is to recover the underlying process at a finer resolution with uncertainty quantification. Examples include remotely sensed or reanalysis products such as land-surface temperature, precipitation, soil moisture, sea-surface temperature, and vegetation indices, as well as other environmental exposures available as gridded averages \citep{moragaandbaker22, forlani2020joint, gomez2019multivariate}.
 
@@ -589,7 +590,7 @@ Thuwal, Saudi Arabia\\
 \address{%
 Paula Moraga\\
 King Abdullah University of Science and Technology (KAUST)\\%
-Thuwal, Saudi Arabia.\\
+Thuwal, Saudi Arabia\\
 %
 \url{https://www.paulamoraga.com/}\\%
 \textit{ORCiD: \href{https://orcid.org/0000-0001-5266-0201}{0000-0001-5266-0201}}\\%
