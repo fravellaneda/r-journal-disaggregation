@@ -1,0 +1,18 @@
+{
+  "title": "Code and data for \"Spatial Disaggregation Modeling with R-INLA for Air Pollution Applications\"",
+  "upload_type": "software",
+  "creators": [
+    {
+      "name": "Rodriguez Avellaneda, Fernando",
+      "affiliation": "King Abdullah University of Science and Technology",
+      "orcid": "0009-0000-0937-0698"
+    },
+    {
+      "name": "Moraga, Paula",
+      "affiliation": "King Abdullah University of Science and Technology",
+      "orcid": "0000-0001-5266-0201"
+    }
+  ],
+  "license": "cc-by-4.0",
+  "keywords": ["spatial disaggregation", "INLA", "SPDE", "air pollution", "PM2.5", "R"]
+}
